@@ -9,10 +9,12 @@
 %_qt5_docdir %{_docdir}/qt5
 %_qt5_examplesdir %{_qt5_prefix}/examples
 %_qt5_headerdir %{_includedir}/qt5
+%_qt5_includedir %{_includedir}/qt5
 %_qt5_importdir %{_qt5_archdatadir}/imports
 %_qt5_libdir %{_libdir}
 %_qt5_libexecdir %{_qt5_archdatadir}/libexec
 %_qt5_plugindir %{_qt5_archdatadir}/plugins
+%_qt5_qmldir %{_qt5_archdatadir}/qml
 %_qt5_qmake %{_qt5_bindir}/qmake
 %_qt5_settingsdir %{_sysconfdir}/xdg
 %_qt5_sysconfdir %{_qt5_settingsdir}

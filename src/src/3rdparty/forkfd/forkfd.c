@@ -1,6 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 Intel Corporation
+** Copyright (C) 2016 Intel Corporation.
 ** Copyright (C) 2015 Klarälvdalens Datakonsult AB, a KDAB Group company, info@kdab.com
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -30,6 +30,9 @@
 #include "forkfd.h"
 
 #include <sys/types.h>
+#if defined(__OpenBSD__) || defined(__NetBSD__)
+#  include <sys/param.h>
+#endif
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <sys/wait.h>
@@ -44,10 +47,12 @@
 
 #ifdef __linux__
 #  define HAVE_WAIT4    1
-#  if defined(__BIONIC__) || (defined(__GLIBC__) && (__GLIBC__ << 8) + __GLIBC_MINOR__ >= 0x207 && \
+#  if defined(__BIONIC__) || (defined(__GLIBC__) && (__GLIBC__ << 8) + __GLIBC_MINOR__ >= 0x208 && \
        (!defined(__UCLIBC__) || ((__UCLIBC_MAJOR__ << 16) + (__UCLIBC_MINOR__ << 8) + __UCLIBC_SUBLEVEL__ > 0x90201)))
 #    include <sys/eventfd.h>
-#    define HAVE_EVENTFD  1
+#    ifdef EFD_CLOEXEC
+#      define HAVE_EVENTFD  1
+#    endif
 #  endif
 #  if defined(__BIONIC__) || (defined(__GLIBC__) && (__GLIBC__ << 8) + __GLIBC_MINOR__ >= 0x209 && \
        (!defined(__UCLIBC__) || ((__UCLIBC_MAJOR__ << 16) + (__UCLIBC_MINOR__ << 8) + __UCLIBC_SUBLEVEL__ > 0x90201)))
@@ -65,7 +70,9 @@
 #  undef HAVE_WAITID
 #endif
 
-#if defined(__FreeBSD__) && defined(__FreeBSD_version) && __FreeBSD_version >= 1000032
+#if (defined(__FreeBSD__) && defined(__FreeBSD_version) && __FreeBSD_version >= 1000032) || \
+    (defined(__OpenBSD__) && OpenBSD >= 201505) || \
+    (defined(__NetBSD__) && __NetBSD_Version__ >= 600000000)
 #  define HAVE_PIPE2    1
 #endif
 #if defined(__FreeBSD__) || defined(__DragonFly__) || defined(__FreeBSD_kernel__) || \
@@ -157,7 +164,7 @@ static ProcessInfo *tryAllocateInSection(Header *header, ProcessInfo entries[], 
     }
 
     /* there isn't an available entry, undo our increment */
-    ffd_atomic_add_fetch(&header->busyCount, -1, FFD_ATOMIC_RELAXED);
+    (void)ffd_atomic_add_fetch(&header->busyCount, -1, FFD_ATOMIC_RELAXED);
     return NULL;
 }
 
@@ -262,7 +269,7 @@ static void freeInfo(Header *header, ProcessInfo *entry)
     entry->deathPipe = -1;
     entry->pid = 0;
 
-    ffd_atomic_add_fetch(&header->busyCount, -1, FFD_ATOMIC_RELEASE);
+    (void)ffd_atomic_add_fetch(&header->busyCount, -1, FFD_ATOMIC_RELEASE);
     assert(header->busyCount >= 0);
 }
 
@@ -276,7 +283,7 @@ static void notifyAndFreeInfo(Header *header, ProcessInfo *entry,
     freeInfo(header, entry);
 }
 
-static void sigchld_handler(int signum)
+static void sigchld_handler(int signum, siginfo_t *handler_info, void *handler_context)
 {
     /*
      * This is a signal handler, so we need to be careful about which functions
@@ -284,7 +291,20 @@ static void sigchld_handler(int signum)
      * specification at:
      *   http://pubs.opengroup.org/onlinepubs/9699919799/functions/V2_chap02.html#tag_15_04_03
      *
+     * The handler_info and handler_context parameters may not be valid, if
+     * we're a chained handler from another handler that did not use
+     * SA_SIGINFO. Therefore, we must obtain the siginfo ourselves directly by
+     * calling waitid.
+     *
+     * But we pass them anyway. Let's call the chained handler first, while
+     * those two arguments have a chance of being correct.
      */
+    if (old_sigaction.sa_handler != SIG_IGN && old_sigaction.sa_handler != SIG_DFL) {
+        if (old_sigaction.sa_flags & SA_SIGINFO)
+            old_sigaction.sa_sigaction(signum, handler_info, handler_context);
+        else
+            old_sigaction.sa_handler(signum);
+    }
 
     if (ffd_atomic_load(&forkfd_status, FFD_ATOMIC_RELAXED) == 1) {
         /* is this one of our children? */
@@ -312,9 +332,8 @@ search_next_child:
         waitid(P_ALL, 0, &info, WNOHANG | WNOWAIT | WEXITED);
         if (info.si_pid == 0) {
             /* there are no further un-waited-for children, so we can just exit.
-             * But before, transfer control to the chained SIGCHLD handler.
              */
-            goto chain_handler;
+            return;
         }
 
         for (i = 0; i < (int)sizeofarray(children.entries); ++i) {
@@ -402,12 +421,26 @@ search_arrays:
             array = ffd_atomic_load(&array->header.nextArray, FFD_ATOMIC_ACQUIRE);
         }
     }
+}
 
-#ifdef HAVE_WAITID
-chain_handler:
+static void ignore_sigpipe()
+{
+#ifdef O_NOSIGPIPE
+    static ffd_atomic_int done = FFD_ATOMIC_INIT(0);
+    if (ffd_atomic_load(&done, FFD_ATOMIC_RELAXED))
+        return;
 #endif
-    if (old_sigaction.sa_handler != SIG_IGN && old_sigaction.sa_handler != SIG_DFL)
-        old_sigaction.sa_handler(signum);
+
+    struct sigaction action;
+    memset(&action, 0, sizeof action);
+    sigemptyset(&action.sa_mask);
+    action.sa_handler = SIG_IGN;
+    action.sa_flags = 0;
+    sigaction(SIGPIPE, &action, NULL);
+
+#ifdef O_NOSIGPIPE
+    ffd_atomic_store(&done, 1, FFD_ATOMIC_RELAXED);
+#endif
 }
 
 static void forkfd_initialize()
@@ -432,8 +465,8 @@ static void forkfd_initialize()
     struct sigaction action;
     memset(&action, 0, sizeof action);
     sigemptyset(&action.sa_mask);
-    action.sa_flags = SA_NOCLDSTOP;
-    action.sa_handler = sigchld_handler;
+    action.sa_flags = SA_NOCLDSTOP | SA_SIGINFO;
+    action.sa_sigaction = sigchld_handler;
 
     /* ### RACE CONDITION
      * The sigaction function does a memcpy from an internal buffer
@@ -445,6 +478,11 @@ static void forkfd_initialize()
      * signal could be delivered to another thread.
      */
     sigaction(SIGCHLD, &action, &old_sigaction);
+
+#ifndef O_NOSIGPIPE
+    /* disable SIGPIPE too */
+    ignore_sigpipe();
+#endif
 
 #ifndef __GNUC__
     atexit(cleanup);
@@ -486,13 +524,23 @@ static void cleanup()
 
 static int create_pipe(int filedes[], int flags)
 {
-    int ret;
+    int ret = -1;
 #ifdef HAVE_PIPE2
     /* use pipe2(2) whenever possible, since it can thread-safely create a
      * cloexec pair of pipes. Without it, we have a race condition setting
      * FD_CLOEXEC
      */
-    ret = pipe2(filedes, O_CLOEXEC);
+
+#  ifdef O_NOSIGPIPE
+    /* try first with O_NOSIGPIPE */
+    ret = pipe2(filedes, O_CLOEXEC | O_NOSIGPIPE);
+    if (ret == -1) {
+        /* O_NOSIGPIPE not supported, ignore SIGPIPE */
+        ignore_sigpipe();
+    }
+#  endif
+    if (ret == -1)
+        ret = pipe2(filedes, O_CLOEXEC);
     if (ret == -1)
         return ret;
 

@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -46,9 +56,9 @@
 #include "ui_authenticationdialog.h"
 
 #ifndef QT_NO_SSL
-static const char defaultUrl[] = "https://qt-project.org/";
+static const char defaultUrl[] = "https://www.qt.io/";
 #else
-static const char defaultUrl[] = "http://qt-project.org/";
+static const char defaultUrl[] = "http://www.qt.io/";
 #endif
 static const char defaultFileName[] = "index.html";
 
@@ -96,7 +106,7 @@ HttpWindow::HttpWindow(QWidget *parent)
     connect(urlLineEdit, &QLineEdit::textChanged,
             this, &HttpWindow::enableDownloadButton);
     formLayout->addRow(tr("&URL:"), urlLineEdit);
-    QString downloadDirectory = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+    QString downloadDirectory = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
     if (downloadDirectory.isEmpty() || !QFileInfo(downloadDirectory).isDir())
         downloadDirectory = QDir::currentPath();
     downloadDirectoryLineEdit->setText(QDir::toNativeSeparators(downloadDirectory));

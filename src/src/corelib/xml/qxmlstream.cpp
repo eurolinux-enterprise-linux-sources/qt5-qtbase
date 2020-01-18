@@ -1,31 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -880,7 +886,7 @@ inline void QXmlStreamReaderPrivate::reallocateStack()
     sym_stack = reinterpret_cast<Value*> (realloc(sym_stack, stack_size * sizeof(Value)));
     Q_CHECK_PTR(sym_stack);
     state_stack = reinterpret_cast<int*> (realloc(state_stack, stack_size * sizeof(int)));
-    Q_CHECK_PTR(sym_stack);
+    Q_CHECK_PTR(state_stack);
 }
 
 
@@ -970,11 +976,11 @@ bool QXmlStreamReaderPrivate::scanUntil(const char *str, short tokenToInject)
         case '\r':
             if ((c = filterCarriageReturn()) == 0)
                 break;
-            // fall through
+            Q_FALLTHROUGH();
         case '\n':
             ++lineNumber;
             lastLineStart = characterOffset + readBufferPos;
-            // fall through
+            Q_FALLTHROUGH();
         case '\t':
             textBuffer += QChar(c);
             continue;
@@ -1152,11 +1158,11 @@ inline int QXmlStreamReaderPrivate::fastScanLiteralContent()
         case '\r':
             if (filterCarriageReturn() == 0)
                 return n;
-            // fall through
+            Q_FALLTHROUGH();
         case '\n':
             ++lineNumber;
             lastLineStart = characterOffset + readBufferPos;
-            // fall through
+            Q_FALLTHROUGH();
         case ' ':
         case '\t':
             if (normalizeLiterals)
@@ -1173,8 +1179,12 @@ inline int QXmlStreamReaderPrivate::fastScanLiteralContent()
                 putChar(c);
                 return n;
             }
-            // fall through
+            Q_FALLTHROUGH();
         default:
+            if (c < 0x20) {
+                putChar(c);
+                return n;
+            }
             textBuffer += QChar(c);
             ++n;
         }
@@ -1191,11 +1201,11 @@ inline int QXmlStreamReaderPrivate::fastScanSpace()
         case '\r':
             if ((c = filterCarriageReturn()) == 0)
                 return n;
-            // fall through
+            Q_FALLTHROUGH();
         case '\n':
             ++lineNumber;
             lastLineStart = characterOffset + readBufferPos;
-            // fall through
+            Q_FALLTHROUGH();
         case ' ':
         case '\t':
             textBuffer += QChar(c);
@@ -1249,11 +1259,11 @@ inline int QXmlStreamReaderPrivate::fastScanContentCharList()
         case '\r':
             if ((c = filterCarriageReturn()) == 0)
                 return n;
-            // fall through
+            Q_FALLTHROUGH();
         case '\n':
             ++lineNumber;
             lastLineStart = characterOffset + readBufferPos;
-            // fall through
+            Q_FALLTHROUGH();
         case ' ':
         case '\t':
             textBuffer += QChar(ushort(c));
@@ -1265,7 +1275,7 @@ inline int QXmlStreamReaderPrivate::fastScanContentCharList()
                 putChar(c);
                 return n;
             }
-            // fall through
+            Q_FALLTHROUGH();
         default:
             if (c < 0x20) {
                 putChar(c);
@@ -1329,7 +1339,7 @@ inline int QXmlStreamReaderPrivate::fastScanName(int *prefix)
                 putChar(c);
                 return n;
             }
-            // fall through
+            Q_FALLTHROUGH();
         default:
             textBuffer += QChar(c);
             ++n;
@@ -2113,7 +2123,7 @@ QString QXmlStreamReader::readElementText(ReadElementTextBehaviour behaviour)
                     result += readElementText(behaviour);
                     break;
                 }
-                // Fall through (for ErrorOnUnexpectedElement)
+                Q_FALLTHROUGH();
             default:
                 if (d->error || behaviour == ErrorOnUnexpectedElement) {
                     if (!d->error)
@@ -3019,10 +3029,14 @@ void QXmlStreamWriterPrivate::checkIfASCIICompatibleCodec()
 {
 #ifndef QT_NO_TEXTCODEC
     Q_ASSERT(encoder);
-    // assumes ASCII-compatibility for all 8-bit encodings
-    QChar space = QLatin1Char(' ');
-    const QByteArray bytes = encoder->fromUnicode(&space, 1);
-    isCodecASCIICompatible = (bytes.count() == 1);
+    // test ASCII-compatibility using the letter 'a'
+    QChar letterA = QLatin1Char('a');
+    const QByteArray bytesA = encoder->fromUnicode(&letterA, 1);
+    const bool isCodecASCIICompatibleA = (bytesA.count() == 1) && (bytesA[0] == 0x61) ;
+    QChar letterLess = QLatin1Char('<');
+    const QByteArray bytesLess = encoder->fromUnicode(&letterLess, 1);
+    const bool isCodecASCIICompatibleLess = (bytesLess.count() == 1) && (bytesLess[0] == 0x3C) ;
+    isCodecASCIICompatible = isCodecASCIICompatibleA && isCodecASCIICompatibleLess ;
 #else
     isCodecASCIICompatible = true;
 #endif
@@ -3784,7 +3798,8 @@ void QXmlStreamWriter::writeStartDocument(const QString &version)
 #ifdef QT_NO_TEXTCODEC
         d->write("iso-8859-1");
 #else
-        d->write(d->codec->name().constData(), d->codec->name().length());
+        const QByteArray name = d->codec->name();
+        d->write(name.constData(), name.length());
 #endif
     }
     d->write("\"?>");
@@ -3807,7 +3822,8 @@ void QXmlStreamWriter::writeStartDocument(const QString &version, bool standalon
 #ifdef QT_NO_TEXTCODEC
         d->write("iso-8859-1");
 #else
-        d->write(d->codec->name().constData(), d->codec->name().length());
+        const QByteArray name = d->codec->name();
+        d->write(name.constData(), name.length());
 #endif
     }
     if (standalone)

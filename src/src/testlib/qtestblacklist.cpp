@@ -1,31 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtTest module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -46,21 +52,40 @@
 QT_BEGIN_NAMESPACE
 
 /*
- The file format is simply a grouped listing of keywords
- Ungrouped entries at the beginning apply to the whole testcase
- Groups define testfunctions or specific test data to ignore.
- After the groups come a list of entries (one per line) that define
- for which platform/os combination to ignore the test result.
- All keys in a single line have to match to blacklist the test.
+  The BLACKLIST file format is a grouped listing of keywords.
 
- mac
- [testFunction]
- linux
- windows 64bit
- [testfunction2:testData]
- msvc
+  Blank lines and everything after # is simply ignored.  An initial #-line
+  referring to this documentation is kind to readers.  Comments can also be used
+  to indicate the reasons for ignoring particular cases.
 
- The known keys are listed below:
+  A key names a platform, O/S, distribution, tool-chain or architecture; a !
+  prefix reverses what it checks.  A version, joined to a key (at present, only
+  for distributions and for msvc) with a hyphen, limits the key to the specific
+  version.  A keyword line matches if every key on it applies to the present
+  run.  Successive lines are alternate conditions for ignoring a test.
+
+  Ungrouped lines at the beginning of a file apply to the whole testcase.
+  A group starts with a [square-bracketed] identification of a test function,
+  optionally with (after a colon, the name of) a specific data set, to ignore.
+  Subsequent lines give conditions for ignoring this test.
+
+        # See qtbase/src/testlib/qtestblacklist.cpp for format
+        osx
+
+        # QTBUG-12345
+        [testFunction]
+        linux
+        windows 64bit
+
+        # Needs basic C++11 support
+        [testfunction2:testData]
+        msvc-2010
+
+  Keys are lower-case.  Distribution name and version are supported if
+  QSysInfo's productType() and productVersion() return them. Keys can be
+  added via the space-separated QTEST_ENVIRONMENT environment variable.
+
+  The other known keys are listed below:
 */
 
 static QSet<QByteArray> keywords()
@@ -74,11 +99,17 @@ static QSet<QByteArray> keywords()
 #ifdef Q_OS_OSX
             << "osx"
 #endif
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
             << "windows"
 #endif
 #ifdef Q_OS_IOS
             << "ios"
+#endif
+#ifdef Q_OS_TVOS
+            << "tvos"
+#endif
+#ifdef Q_OS_WATCHOS
+            << "watchos"
 #endif
 #ifdef Q_OS_ANDROID
             << "android"
@@ -88,9 +119,6 @@ static QSet<QByteArray> keywords()
 #endif
 #ifdef Q_OS_WINRT
             << "winrt"
-#endif
-#ifdef Q_OS_WINCE
-            << "wince"
 #endif
 
 #if QT_POINTER_SIZE == 8
@@ -108,7 +136,9 @@ static QSet<QByteArray> keywords()
 #ifdef Q_CC_MSVC
             << "msvc"
     #ifdef _MSC_VER
-        #if _MSC_VER == 1900
+        #if _MSC_VER == 1910
+            << "msvc-2017"
+        #elif _MSC_VER == 1900
             << "msvc-2015"
         #elif _MSC_VER == 1800
             << "msvc-2013"
@@ -118,6 +148,13 @@ static QSet<QByteArray> keywords()
             << "msvc-2010"
         #endif
     #endif
+#endif
+
+#ifdef Q_PROCESSOR_X86
+            << "x86"
+#endif
+#ifdef Q_PROCESSOR_ARM
+            << "arm"
 #endif
 
 #ifdef Q_AUTOTEST_EXPORT
@@ -135,18 +172,34 @@ static QSet<QByteArray> keywords()
             return set;
 }
 
-static bool checkCondition(const QByteArray &condition)
+static QSet<QByteArray> activeConditions()
 {
-    static QSet<QByteArray> matchedConditions = keywords();
-    QList<QByteArray> conds = condition.split(' ');
+    QSet<QByteArray> result = keywords();
 
     QByteArray distributionName = QSysInfo::productType().toLower().toUtf8();
     QByteArray distributionRelease = QSysInfo::productVersion().toLower().toUtf8();
     if (!distributionName.isEmpty()) {
-        if (matchedConditions.find(distributionName) == matchedConditions.end())
-            matchedConditions.insert(distributionName);
-        matchedConditions.insert(distributionName + "-" + distributionRelease);
+        if (result.find(distributionName) == result.end())
+            result.insert(distributionName);
+        if (!distributionRelease.isEmpty()) {
+            QByteArray versioned = distributionName + "-" + distributionRelease;
+            if (result.find(versioned) == result.end())
+                result.insert(versioned);
+        }
     }
+
+    if (qEnvironmentVariableIsSet("QTEST_ENVIRONMENT")) {
+        for (const QByteArray &k : qgetenv("QTEST_ENVIRONMENT").split(' '))
+            result.insert(k);
+    }
+
+    return result;
+}
+
+static bool checkCondition(const QByteArray &condition)
+{
+    static const QSet<QByteArray> matchedConditions = activeConditions();
+    QList<QByteArray> conds = condition.split(' ');
 
     for (int i = 0; i < conds.size(); ++i) {
         QByteArray c = conds.at(i);
@@ -194,8 +247,12 @@ void parseBlackList()
     QByteArray function;
 
     while (!ignored.atEnd()) {
-        QByteArray line = ignored.readLine().simplified();
-        if (line.isEmpty() || line.startsWith('#'))
+        QByteArray line = ignored.readLine();
+        const int commentPosition = line.indexOf('#');
+        if (commentPosition >= 0)
+            line.truncate(commentPosition);
+        line = line.simplified();
+        if (line.isEmpty())
             continue;
         if (line.startsWith('[')) {
             function = line.mid(1, line.length() - 2);
