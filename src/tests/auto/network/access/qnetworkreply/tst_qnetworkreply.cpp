@@ -7295,11 +7295,7 @@ void tst_QNetworkReply::qtbug45581WrongReplyStatusCode()
 
     const QByteArray expectedContent =
             "<root attr=\"value\" attr2=\"value2\">"
-            "<person /><fruit /></root>"
-#ifdef Q_OS_WIN
-            "\r"
-#endif
-            "\n";
+            "<person /><fruit /></root>\n";
 
     QCOMPARE(reply->readAll(), expectedContent);
 

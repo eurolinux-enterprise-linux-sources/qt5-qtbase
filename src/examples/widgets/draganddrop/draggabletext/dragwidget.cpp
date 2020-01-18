@@ -150,9 +150,7 @@ void DragWidget::mousePressEvent(QMouseEvent *event)
     mimeData->setData(hotSpotMimeDataKey(),
                       QByteArray::number(hotSpot.x()) + ' ' + QByteArray::number(hotSpot.y()));
 
-    qreal dpr = window()->windowHandle()->devicePixelRatio();
-    QPixmap pixmap(child->size() * dpr);
-    pixmap.setDevicePixelRatio(dpr);
+    QPixmap pixmap(child->size());
     child->render(&pixmap);
 
     QDrag *drag = new QDrag(this);

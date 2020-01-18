@@ -269,11 +269,25 @@ QJsonValue::QJsonValue(const QJsonValue &other)
  */
 QJsonValue &QJsonValue::operator =(const QJsonValue &other)
 {
-    QJsonValue copy(other);
-    // swap(copy);
-    qSwap(dbl, copy.dbl);
-    qSwap(d,   copy.d);
-    qSwap(t,   copy.t);
+    if (t == String && stringData && !stringData->ref.deref())
+        free(stringData);
+
+    t = other.t;
+    dbl = other.dbl;
+
+    if (d != other.d) {
+
+        if (d && !d->ref.deref())
+            delete d;
+        d = other.d;
+        if (d)
+            d->ref.ref();
+
+    }
+
+    if (t == String && stringData)
+        stringData->ref.ref();
+
     return *this;
 }
 

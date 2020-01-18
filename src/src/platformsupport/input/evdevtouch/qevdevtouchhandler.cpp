@@ -393,13 +393,9 @@ void QEvdevTouchScreenHandler::unregisterTouchDevice()
     if (!m_device)
         return;
 
-    // At app exit the cleanup may have already been done, avoid
-    // double delete by checking the list first.
-    if (QWindowSystemInterface::isTouchDeviceRegistered(m_device)) {
-        QWindowSystemInterface::unregisterTouchDevice(m_device);
-        delete m_device;
-    }
+    QWindowSystemInterface::unregisterTouchDevice(m_device);
 
+    delete m_device;
     m_device = Q_NULLPTR;
 }
 

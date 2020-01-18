@@ -94,7 +94,7 @@ private Q_SLOTS:
     void updateServices(const ConnmanMapList &changed, const QList<QDBusObjectPath> &removed);
 
     void servicesReady(const QStringList &);
-    void finishedScan(bool error);
+    void finishedScan();
     void changedModem();
     void serviceStateChanged(const QString &state);
     void configurationChange(QConnmanServiceInterface * service);

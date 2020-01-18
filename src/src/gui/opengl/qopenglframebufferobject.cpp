@@ -1068,7 +1068,6 @@ bool QOpenGLFramebufferObject::bind()
     d->funcs.glBindFramebuffer(GL_FRAMEBUFFER, d->fbo());
 
     QOpenGLContextPrivate::get(current)->qgl_current_fbo_invalid = true;
-    QOpenGLContextPrivate::get(current)->qgl_current_fbo = this;
 
     if (d->format.samples() == 0) {
         // Create new textures to replace the ones stolen via takeTexture().
@@ -1108,9 +1107,7 @@ bool QOpenGLFramebufferObject::release()
     if (current) {
         d->funcs.glBindFramebuffer(GL_FRAMEBUFFER, current->defaultFramebufferObject());
 
-        QOpenGLContextPrivate *contextPrv = QOpenGLContextPrivate::get(current);
-        contextPrv->qgl_current_fbo_invalid = true;
-        contextPrv->qgl_current_fbo = Q_NULLPTR;
+        QOpenGLContextPrivate::get(current)->qgl_current_fbo_invalid = true;
     }
 
     return true;
@@ -1285,17 +1282,13 @@ static inline QImage qt_gl_read_framebuffer_rgba8(const QSize &size, bool includ
     const char *ver = reinterpret_cast<const char *>(funcs->glGetString(GL_VERSION));
 
     // Blacklist GPU chipsets that have problems with their BGRA support.
-#ifndef Q_OS_IOS
     const bool blackListed = (qstrcmp(renderer, "PowerVR Rogue G6200") == 0
                              && ::strstr(ver, "1.3") != 0) ||
                              (qstrcmp(renderer, "Mali-T760") == 0
                              && ::strstr(ver, "3.1") != 0) ||
                              (qstrcmp(renderer, "Mali-T720") == 0
-                             && ::strstr(ver, "3.1") != 0) ||
-                             qstrcmp(renderer, "PowerVR SGX 554") == 0;
-#else
-    const bool blackListed = true;
-#endif
+                             && ::strstr(ver, "3.1") != 0);
+
     const bool supports_bgra = has_bgra_ext && !blackListed;
 
     if (supports_bgra) {

@@ -787,14 +787,7 @@ public class ExtractStyle {
 
     private JSONObject findPatchesMarings(Drawable d) throws JSONException, NoSuchFieldException, IllegalAccessException
     {
-        NinePatch np;
-        Field f = tryGetAccessibleField(NinePatchDrawable.class, "mNinePatch");
-        if (f != null) {
-            np = (NinePatch) f.get(d);
-        } else {
-            Object state = getAccessibleField(NinePatchDrawable.class, "mNinePatchState").get(d);
-            np = (NinePatch) getAccessibleField(state.getClass(), "mNinePatch").get(state);
-        }
+        NinePatch np = (NinePatch) getAccessibleField(NinePatchDrawable.class, "mNinePatch").get(d);
         if (Build.VERSION.SDK_INT < 19)
             return getJsonChunkInfo(extractChunkInfo((byte[]) getAccessibleField(np.getClass(), "mChunk").get(np)));
         else

@@ -313,10 +313,10 @@ index 0000000..d08a8a0
 +SOURCES = ppoll.cpp
 +CONFIG -= qt
 diff --git a/configure b/configure
-index 0b8b417..f63daef 100755
+index 7651e29..9be4179 100755
 --- a/configure
 +++ b/configure
-@@ -745,6 +745,7 @@ CFG_GETIFADDRS=auto
+@@ -729,6 +729,7 @@ CFG_GETIFADDRS=auto
  CFG_INOTIFY=auto
  CFG_EVENTFD=auto
  CFG_CLOEXEC=no
@@ -324,10 +324,10 @@ index 0b8b417..f63daef 100755
  CFG_RPATH=yes
  CFG_FRAMEWORK=auto
  CFG_USE_GOLD_LINKER=auto
-@@ -6068,6 +6069,16 @@ if compileTest unix/cloexec "cloexec"; then
+@@ -6043,6 +6044,16 @@ if compileTest unix/cloexec "cloexec"; then
      CFG_CLOEXEC=yes
  fi
- 
+
 +if compileTest unix/ppoll "ppoll"; then
 +    CFG_POLL="ppoll"
 +elif compileTest unix/pollts "pollts"; then
@@ -341,7 +341,7 @@ index 0b8b417..f63daef 100755
  if [ "$XPLATFORM_MAC" = "yes" ] && [ "$CFG_SECURETRANSPORT" != "no" ] && ([ "$CFG_OPENSSL" = "no" ] || [ "$CFG_OPENSSL" = "auto" ]); then
      CFG_SECURETRANSPORT=yes
      CFG_OPENSSL=no
-@@ -6379,6 +6390,10 @@ fi
+@@ -6350,6 +6361,10 @@ fi
  if [ "$CFG_CLOEXEC" = "yes" ]; then
      QT_CONFIG="$QT_CONFIG threadsafe-cloexec"
  fi
@@ -353,13 +353,13 @@ index 0b8b417..f63daef 100755
      CFG_JPEG="no"
  elif [ "$CFG_LIBJPEG" = "system" ]; then
 diff --git a/src/corelib/io/qprocess_unix.cpp b/src/corelib/io/qprocess_unix.cpp
-index fda9178..89e4665 100644
+index 8eb5ac9..74a0c41 100644
 --- a/src/corelib/io/qprocess_unix.cpp
 +++ b/src/corelib/io/qprocess_unix.cpp
 @@ -115,11 +115,52 @@ QT_BEGIN_NAMESPACE
  // so we will use 512
  static const int errorBufferMax = 512;
- 
+
 -static inline void add_fd(int &nfds, int fd, fd_set *fdset)
 +namespace {
 +struct QProcessPoller
@@ -411,12 +411,12 @@ index fda9178..89e4665 100644
 +{
 +    return pfd.fd >= 0 && (pfd.revents & (revents | POLLHUP | POLLERR | POLLNVAL)) != 0;
  }
- 
+
  static int qt_create_pipe(int *pipe)
-@@ -677,10 +718,9 @@ bool QProcessPrivate::waitForStarted(int msecs)
+@@ -812,10 +853,9 @@ bool QProcessPrivate::waitForStarted(int msecs)
             childStartedPipe[0]);
  #endif
- 
+
 -    fd_set fds;
 -    FD_ZERO(&fds);
 -    FD_SET(childStartedPipe[0], &fds);
@@ -427,9 +427,9 @@ index fda9178..89e4665 100644
          setError(QProcess::Timedout);
  #if defined (QPROCESS_DEBUG)
          qDebug("QProcessPrivate::waitForStarted(%d) == false (timed out)", msecs);
-@@ -720,31 +760,13 @@ bool QProcessPrivate::waitForReadyRead(int msecs)
+@@ -855,31 +895,13 @@ bool QProcessPrivate::waitForReadyRead(int msecs)
  #endif
- 
+
      forever {
 -        fd_set fdread;
 -        fd_set fdwrite;
@@ -451,7 +451,7 @@ index fda9178..89e4665 100644
 -        if (!stdinChannel.buffer.isEmpty() && stdinChannel.pipe[1] != -1)
 -            add_fd(nfds, stdinChannel.pipe[1], &fdwrite);
 +        QProcessPoller poller(*this);
- 
+
          int timeout = qt_subtract_from_timeout(msecs, stopWatch.elapsed());
  #ifdef Q_OS_BLACKBERRY
          int ret = bb_select(notifiers, nfds + 1, &fdread, &fdwrite, timeout);
@@ -461,16 +461,16 @@ index fda9178..89e4665 100644
  #endif
          if (ret < 0) {
              break;
-@@ -754,18 +776,18 @@ bool QProcessPrivate::waitForReadyRead(int msecs)
+@@ -889,18 +911,18 @@ bool QProcessPrivate::waitForReadyRead(int msecs)
              return false;
          }
- 
+
 -        if (childStartedPipe[0] != -1 && FD_ISSET(childStartedPipe[0], &fdread)) {
 +        if (qt_pollfd_check(poller.childStartedPipe(), POLLIN)) {
              if (!_q_startupNotification())
                  return false;
          }
- 
+
          bool readyReadEmitted = false;
 -        if (stdoutChannel.pipe[0] != -1 && FD_ISSET(stdoutChannel.pipe[0], &fdread)) {
 +        if (qt_pollfd_check(poller.stdoutPipe(), POLLIN)) {
@@ -483,22 +483,22 @@ index fda9178..89e4665 100644
              bool canRead = _q_canReadStandardError();
              if (processChannel == QProcess::StandardError && canRead)
                  readyReadEmitted = true;
-@@ -773,10 +795,10 @@ bool QProcessPrivate::waitForReadyRead(int msecs)
+@@ -908,10 +930,10 @@ bool QProcessPrivate::waitForReadyRead(int msecs)
          if (readyReadEmitted)
              return true;
- 
+
 -        if (stdinChannel.pipe[1] != -1 && FD_ISSET(stdinChannel.pipe[1], &fdwrite))
 +        if (qt_pollfd_check(poller.stdinPipe(), POLLOUT))
              _q_canWrite();
- 
+
 -        if (forkfd == -1 || FD_ISSET(forkfd, &fdread)) {
 +        if (qt_pollfd_check(poller.forkfd(), POLLIN)) {
              if (_q_processDied())
                  return false;
          }
-@@ -798,32 +820,13 @@ bool QProcessPrivate::waitForBytesWritten(int msecs)
+@@ -933,32 +955,13 @@ bool QProcessPrivate::waitForBytesWritten(int msecs)
  #endif
- 
+
      while (!stdinChannel.buffer.isEmpty()) {
 -        fd_set fdread;
 -        fd_set fdwrite;
@@ -521,7 +521,7 @@ index fda9178..89e4665 100644
 -        if (!stdinChannel.buffer.isEmpty() && stdinChannel.pipe[1] != -1)
 -            add_fd(nfds, stdinChannel.pipe[1], &fdwrite);
 +        QProcessPoller poller(*this);
- 
+
          int timeout = qt_subtract_from_timeout(msecs, stopWatch.elapsed());
  #ifdef Q_OS_BLACKBERRY
          int ret = bb_select(notifiers, nfds + 1, &fdread, &fdwrite, timeout);
@@ -531,36 +531,36 @@ index fda9178..89e4665 100644
  #endif
          if (ret < 0) {
              break;
-@@ -834,21 +837,21 @@ bool QProcessPrivate::waitForBytesWritten(int msecs)
+@@ -969,21 +972,21 @@ bool QProcessPrivate::waitForBytesWritten(int msecs)
              return false;
          }
- 
+
 -        if (childStartedPipe[0] != -1 && FD_ISSET(childStartedPipe[0], &fdread)) {
 +        if (qt_pollfd_check(poller.childStartedPipe(), POLLIN)) {
              if (!_q_startupNotification())
                  return false;
          }
- 
+
 -        if (stdinChannel.pipe[1] != -1 && FD_ISSET(stdinChannel.pipe[1], &fdwrite))
 +        if (qt_pollfd_check(poller.stdinPipe(), POLLOUT))
              return _q_canWrite();
- 
+
 -        if (stdoutChannel.pipe[0] != -1 && FD_ISSET(stdoutChannel.pipe[0], &fdread))
 +        if (qt_pollfd_check(poller.stdoutPipe(), POLLIN))
              _q_canReadStandardOutput();
- 
+
 -        if (stderrChannel.pipe[0] != -1 && FD_ISSET(stderrChannel.pipe[0], &fdread))
 +        if (qt_pollfd_check(poller.stderrPipe(), POLLIN))
              _q_canReadStandardError();
- 
+
 -        if (forkfd == -1 || FD_ISSET(forkfd, &fdread)) {
 +        if (qt_pollfd_check(poller.forkfd(), POLLIN)) {
              if (_q_processDied())
                  return false;
          }
-@@ -871,32 +874,13 @@ bool QProcessPrivate::waitForFinished(int msecs)
+@@ -1006,32 +1009,13 @@ bool QProcessPrivate::waitForFinished(int msecs)
  #endif
- 
+
      forever {
 -        fd_set fdread;
 -        fd_set fdwrite;
@@ -583,7 +583,7 @@ index fda9178..89e4665 100644
 -        if (!stdinChannel.buffer.isEmpty() && stdinChannel.pipe[1] != -1)
 -            add_fd(nfds, stdinChannel.pipe[1], &fdwrite);
 +        QProcessPoller poller(*this);
- 
+
          int timeout = qt_subtract_from_timeout(msecs, stopWatch.elapsed());
  #ifdef Q_OS_BLACKBERRY
          int ret = bb_select(notifiers, nfds + 1, &fdread, &fdwrite, timeout);
@@ -593,10 +593,10 @@ index fda9178..89e4665 100644
  #endif
          if (ret < 0) {
              break;
-@@ -906,20 +890,20 @@ bool QProcessPrivate::waitForFinished(int msecs)
+@@ -1041,20 +1025,20 @@ bool QProcessPrivate::waitForFinished(int msecs)
              return false;
          }
- 
+
 -        if (childStartedPipe[0] != -1 && FD_ISSET(childStartedPipe[0], &fdread)) {
 +        if (qt_pollfd_check(poller.childStartedPipe(), POLLIN)) {
              if (!_q_startupNotification())
@@ -605,22 +605,22 @@ index fda9178..89e4665 100644
 -        if (stdinChannel.pipe[1] != -1 && FD_ISSET(stdinChannel.pipe[1], &fdwrite))
 +        if (qt_pollfd_check(poller.stdinPipe(), POLLOUT))
              _q_canWrite();
- 
+
 -        if (stdoutChannel.pipe[0] != -1 && FD_ISSET(stdoutChannel.pipe[0], &fdread))
 +        if (qt_pollfd_check(poller.stdoutPipe(), POLLIN))
              _q_canReadStandardOutput();
- 
+
 -        if (stderrChannel.pipe[0] != -1 && FD_ISSET(stderrChannel.pipe[0], &fdread))
 +        if (qt_pollfd_check(poller.stderrPipe(), POLLIN))
              _q_canReadStandardError();
- 
+
 -        if (forkfd == -1 || FD_ISSET(forkfd, &fdread)) {
 +        if (qt_pollfd_check(poller.forkfd(), POLLIN)) {
              if (_q_processDied())
                  return true;
          }
-@@ -929,10 +913,8 @@ bool QProcessPrivate::waitForFinished(int msecs)
- 
+@@ -1064,10 +1048,8 @@ bool QProcessPrivate::waitForFinished(int msecs)
+
  bool QProcessPrivate::waitForWrite(int msecs)
  {
 -    fd_set fdwrite;
@@ -630,7 +630,7 @@ index fda9178..89e4665 100644
 +    pollfd pfd = qt_make_pollfd(stdinChannel.pipe[1], POLLOUT);
 +    return qt_poll_msecs(&pfd, 1, msecs < 0 ? 0 : msecs) == 1;
  }
- 
+
  void QProcessPrivate::findExitCode()
 diff --git a/src/corelib/kernel/kernel.pri b/src/corelib/kernel/kernel.pri
 index bc93791..ff64b4e 100644
@@ -642,7 +642,7 @@ index bc93791..ff64b4e 100644
              kernel/qeventdispatcher_unix_p.h \
 +            kernel/qpoll_p.h \
              kernel/qtimerinfo_unix_p.h
- 
+
 +    contains(QT_CONFIG, poll_select): SOURCES += kernel/qpoll.cpp
 +    contains(QT_CONFIG, poll_poll): DEFINES += QT_HAVE_POLL
 +    contains(QT_CONFIG, poll_ppoll): DEFINES += QT_HAVE_POLL QT_HAVE_PPOLL
@@ -652,13 +652,13 @@ index bc93791..ff64b4e 100644
          SOURCES += \
              kernel/qeventdispatcher_glib.cpp
 diff --git a/src/corelib/kernel/qcore_unix.cpp b/src/corelib/kernel/qcore_unix.cpp
-index 1bcb472..3a3990c 100644
+index 5695cb3..2ffc746 100644
 --- a/src/corelib/kernel/qcore_unix.cpp
 +++ b/src/corelib/kernel/qcore_unix.cpp
-@@ -46,6 +46,11 @@
- 
+@@ -56,6 +56,11 @@
+
  QT_BEGIN_NAMESPACE
- 
+
 +#if !defined(QT_HAVE_PPOLL) && defined(QT_HAVE_POLLTS)
 +# define ppoll pollts
 +# define QT_HAVE_PPOLL
@@ -667,7 +667,7 @@ index 1bcb472..3a3990c 100644
  static inline bool time_update(struct timespec *tv, const struct timespec &start,
                                 const struct timespec &timeout)
  {
-@@ -75,9 +80,7 @@ int qt_safe_select(int nfds, fd_set *fdread, fd_set *fdwrite, fd_set *fdexcept,
+@@ -85,9 +90,7 @@ int qt_safe_select(int nfds, fd_set *fdread, fd_set *fdwrite, fd_set *fdexcept,
  #ifndef Q_OS_QNX
          ret = ::pselect(nfds, fdread, fdwrite, fdexcept, &timeout, 0);
  #else
@@ -678,10 +678,10 @@ index 1bcb472..3a3990c 100644
          ret = ::select(nfds, fdread, fdwrite, fdexcept, &timeoutVal);
  #endif
          if (ret != -1 || errno != EINTR)
-@@ -92,17 +95,82 @@ int qt_safe_select(int nfds, fd_set *fdread, fd_set *fdwrite, fd_set *fdexcept,
+@@ -102,17 +105,82 @@ int qt_safe_select(int nfds, fd_set *fdread, fd_set *fdwrite, fd_set *fdexcept,
      }
  }
- 
+
 +static inline struct timespec millisecsToTimespec(const unsigned int ms)
 +{
 +    struct timespec tv;
@@ -696,14 +696,14 @@ index 1bcb472..3a3990c 100644
  {
      if (timeout < 0)
          return qt_safe_select(nfds, fdread, fdwrite, 0, 0);
- 
+
 -    struct timespec tv;
 -    tv.tv_sec = timeout / 1000;
 -    tv.tv_nsec = (timeout % 1000) * 1000 * 1000;
 +    struct timespec tv = millisecsToTimespec(timeout);
      return qt_safe_select(nfds, fdread, fdwrite, 0, &tv);
  }
- 
+
 +#if !defined(QT_HAVE_PPOLL) && defined(QT_HAVE_POLL)
 +static inline int timespecToMillisecs(const struct timespec *ts)
 +{
@@ -765,13 +765,13 @@ index 1bcb472..3a3990c 100644
  // The BlackBerry event dispatcher uses bps_get_event. Unfortunately, already registered
  // socket notifiers are disabled by a call to select. This is to rearm the standard streams.
 diff --git a/src/corelib/kernel/qcore_unix_p.h b/src/corelib/kernel/qcore_unix_p.h
-index 07725b8..64f62f5 100644
+index f80dcb5..fc3f63b 100644
 --- a/src/corelib/kernel/qcore_unix_p.h
 +++ b/src/corelib/kernel/qcore_unix_p.h
-@@ -80,6 +80,12 @@
+@@ -66,6 +66,12 @@
  #  include <ioLib.h>
  #endif
- 
+
 +#ifdef QT_NO_NATIVE_POLL
 +#  include "qpoll_p.h"
 +#else
@@ -779,12 +779,12 @@ index 07725b8..64f62f5 100644
 +#endif
 +
  struct sockaddr;
- 
+
  #define EINTR_LOOP(var, cmd)                    \
-@@ -136,6 +142,14 @@ inline timespec operator*(const timespec &t1, int mul)
+@@ -122,6 +128,14 @@ inline timespec operator*(const timespec &t1, int mul)
      return normalizedTimespec(tmp);
  }
- 
+
 +inline timeval timespecToTimeval(const timespec &ts)
 +{
 +    timeval tv;
@@ -796,10 +796,10 @@ index 07725b8..64f62f5 100644
  inline void qt_ignore_sigpipe()
  {
      // Set to ignore SIGPIPE once only.
-@@ -317,6 +331,27 @@ static inline pid_t qt_safe_waitpid(pid_t pid, int *status, int options)
+@@ -303,6 +317,27 @@ static inline pid_t qt_safe_waitpid(pid_t pid, int *status, int options)
  timespec qt_gettime() Q_DECL_NOTHROW;
  void qt_nanosleep(timespec amount);
- 
+
 +Q_CORE_EXPORT int qt_safe_poll(struct pollfd *fds, nfds_t nfds, const struct timespec *timeout_ts);
 +
 +static inline int qt_poll_msecs(struct pollfd *fds, nfds_t nfds, int timeout)
@@ -823,9 +823,9 @@ index 07725b8..64f62f5 100644
 +
  Q_CORE_EXPORT int qt_safe_select(int nfds, fd_set *fdread, fd_set *fdwrite, fd_set *fdexcept,
                                   const struct timespec *tv);
- 
+
 diff --git a/src/corelib/kernel/qeventdispatcher_unix.cpp b/src/corelib/kernel/qeventdispatcher_unix.cpp
-index 155f7b7..9567e29 100644
+index 155f7b7..7d23283 100644
 --- a/src/corelib/kernel/qeventdispatcher_unix.cpp
 +++ b/src/corelib/kernel/qeventdispatcher_unix.cpp
 @@ -59,7 +59,7 @@
@@ -835,12 +835,12 @@ index 155f7b7..9567e29 100644
 -#  include <selectLib.h>
 +#  include <sys/time.h>
  #endif
- 
+
  #if (_POSIX_MONOTONIC_CLOCK-0 <= 0) || defined(QT_BOOTSTRAPPED)
 @@ -68,6 +68,20 @@
- 
+
  QT_BEGIN_NAMESPACE
- 
+
 +static const char *socketType(QSocketNotifier::Type type)
 +{
 +    switch (type) {
@@ -859,18 +859,18 @@ index 155f7b7..9567e29 100644
  static void initThreadPipeFD(int fd)
  {
 @@ -137,8 +151,6 @@ QEventDispatcherUNIXPrivate::QEventDispatcherUNIXPrivate()
- 
+
      if (pipefail)
          qFatal("QEventDispatcherUNIXPrivate(): Can not continue without a thread pipe");
 -
 -    sn_highest = -1;
  }
- 
+
  QEventDispatcherUNIXPrivate::~QEventDispatcherUNIXPrivate()
 @@ -163,116 +175,11 @@ QEventDispatcherUNIXPrivate::~QEventDispatcherUNIXPrivate()
      qDeleteAll(timerList);
  }
- 
+
 -int QEventDispatcherUNIXPrivate::doSelect(QEventLoop::ProcessEventsFlags flags, timespec *timeout)
 -{
 -    Q_Q(QEventDispatcherUNIX);
@@ -979,7 +979,7 @@ index 155f7b7..9567e29 100644
 -    return thread_pipe[0];
 -}
 +    Q_ASSERT(pfd.fd == thread_pipe[0]);
- 
+
 -int QEventDispatcherUNIXPrivate::processThreadWakeUp(int nsel)
 -{
 -    if (nsel > 0 && FD_ISSET(thread_pipe[0], &sn_vec[0].select_fds)) {
@@ -990,7 +990,7 @@ index 155f7b7..9567e29 100644
 @@ -302,6 +209,80 @@ int QEventDispatcherUNIXPrivate::processThreadWakeUp(int nsel)
      return 0;
  }
- 
+
 +void QEventDispatcherUNIXPrivate::setSocketNotifierPending(QSocketNotifier *notifier)
 +{
 +    Q_ASSERT(notifier);
@@ -1070,7 +1070,7 @@ index 155f7b7..9567e29 100644
  { }
 @@ -311,14 +292,7 @@ QEventDispatcherUNIX::QEventDispatcherUNIX(QEventDispatcherUNIXPrivate &dd, QObj
  { }
- 
+
  QEventDispatcherUNIX::~QEventDispatcherUNIX()
 -{
 -}
@@ -1081,12 +1081,12 @@ index 155f7b7..9567e29 100644
 -    return qt_safe_select(nfds, readfds, writefds, exceptfds, timeout);
 -}
 +{ }
- 
+
  /*!
      \internal
 @@ -390,22 +364,6 @@ QEventDispatcherUNIX::registeredTimers(QObject *object) const
  }
- 
+
  /*****************************************************************************
 - Socket notifier type
 - *****************************************************************************/
@@ -1106,7 +1106,7 @@ index 155f7b7..9567e29 100644
 -/*****************************************************************************
   QEventDispatcher implementations for UNIX
   *****************************************************************************/
- 
+
 @@ -413,160 +371,57 @@ void QEventDispatcherUNIX::registerSocketNotifier(QSocketNotifier *notifier)
  {
      Q_ASSERT(notifier);
@@ -1125,7 +1125,7 @@ index 155f7b7..9567e29 100644
          return;
      }
  #endif
- 
+
      Q_D(QEventDispatcherUNIX);
 -    QSockNotType::List &list = d->sn_vec[type].list;
 -    fd_set *fds  = &d->sn_vec[type].enabled_fds;
@@ -1153,12 +1153,12 @@ index 155f7b7..9567e29 100644
 +    if (sn_set.notifiers[type] && sn_set.notifiers[type] != notifier)
 +        qWarning("%s: Multiple socket notifiers for same socket %d and type %s",
 +                 Q_FUNC_INFO, sockfd, socketType(type));
- 
+
 -    FD_SET(sockfd, fds);
 -    d->sn_highest = qMax(d->sn_highest, sockfd);
 +    sn_set.notifiers[type] = notifier;
  }
- 
+
  void QEventDispatcherUNIX::unregisterSocketNotifier(QSocketNotifier *notifier)
  {
      Q_ASSERT(notifier);
@@ -1177,7 +1177,7 @@ index 155f7b7..9567e29 100644
          return;
      }
  #endif
- 
+
      Q_D(QEventDispatcherUNIX);
 -    QSockNotType::List &list = d->sn_vec[type].list;
 -    fd_set *fds  =  &d->sn_vec[type].enabled_fds;
@@ -1191,7 +1191,7 @@ index 155f7b7..9567e29 100644
 -    if (i == list.size()) // not found
 -        return;
 +    d->pendingNotifiers.removeOne(notifier);
- 
+
 -    FD_CLR(sockfd, fds);                        // clear fd bit
 -    FD_CLR(sockfd, sn->queue);
 -    d->sn_pending_list.removeAll(sn);                // remove from activation list
@@ -1224,7 +1224,7 @@ index 155f7b7..9567e29 100644
 -    Q_ASSERT(notifier->thread() == thread() && thread() == QThread::currentThread());
 -#endif
 +    QSocketNotifierSetUNIX &sn_set = i.value();
- 
+
 -    Q_D(QEventDispatcherUNIX);
 -    QSockNotType::List &list = d->sn_vec[type].list;
 -    QSockNot *sn = 0;
@@ -1237,7 +1237,7 @@ index 155f7b7..9567e29 100644
 -    if (i == list.size()) // not found
 +    if (sn_set.notifiers[type] == nullptr)
          return;
- 
+
 -    // We choose a random activation order to be more fair under high load.
 -    // If a constant order is used and a peer early in the list can
 -    // saturate the IO, it might grab our attention completely.
@@ -1265,14 +1265,14 @@ index 155f7b7..9567e29 100644
 -    Q_D(QEventDispatcherUNIX);
 -    return d->timerList.activateTimers();
 -}
- 
+
 -int QEventDispatcherUNIX::activateSocketNotifiers()
 -{
 -    Q_D(QEventDispatcherUNIX);
 -    if (d->sn_pending_list.isEmpty())
 -        return 0;
 +    sn_set.notifiers[type] = nullptr;
- 
+
 -    // activate entries
 -    int n_act = 0;
 -    QEvent event(QEvent::SockAct);
@@ -1288,12 +1288,12 @@ index 155f7b7..9567e29 100644
 +    if (sn_set.isEmpty())
 +        d->socketNotifiers.erase(i);
  }
- 
+
  bool QEventDispatcherUNIX::processEvents(QEventLoop::ProcessEventsFlags flags)
 @@ -578,39 +433,54 @@ bool QEventDispatcherUNIX::processEvents(QEventLoop::ProcessEventsFlags flags)
      emit awake();
      QCoreApplicationPrivate::sendPostedEvents(0, 0, d->threadData);
- 
+
 -    int nevents = 0;
 +    const bool include_timers = (flags & QEventLoop::X11ExcludeTimers) == 0;
 +    const bool include_notifiers = (flags & QEventLoop::ExcludeSocketNotifiers) == 0;
@@ -1303,10 +1303,10 @@ index 155f7b7..9567e29 100644
                            && !d->interrupt.load()
 -                          && (flags & QEventLoop::WaitForMoreEvents));
 +                          && wait_for_events);
- 
+
      if (canWait)
          emit aboutToBlock();
- 
+
 -    if (!d->interrupt.load()) {
 -        // return the maximum time we can wait for an event.
 -        timespec *tm = 0;
@@ -1317,24 +1317,24 @@ index 155f7b7..9567e29 100644
 -        }
 +    if (d->interrupt.load())
 +        return false;
- 
+
 -        if (!canWait) {
 -            if (!tm)
 -                tm = &wait_tm;
 +    timespec *tm = nullptr;
 +    timespec wait_tm = { 0, 0 };
- 
+
 -            // no time to wait
 -            tm->tv_sec  = 0l;
 -            tm->tv_nsec = 0l;
 -        }
 +    if (!canWait || (include_timers && d->timerList.timerWait(wait_tm)))
 +        tm = &wait_tm;
- 
+
 -        nevents = d->doSelect(flags, tm);
 +    d->pollfds.reserve(1 + (include_notifiers ? d->socketNotifiers.size() : 0));
 +    d->pollfds.resize(0);
- 
+
 -        // activate timers
 -        if (! (flags & QEventLoop::X11ExcludeTimers)) {
 -            nevents += activateTimers();
@@ -1368,13 +1368,13 @@ index 155f7b7..9567e29 100644
      return (nevents > 0);
  }
 diff --git a/src/corelib/kernel/qeventdispatcher_unix_p.h b/src/corelib/kernel/qeventdispatcher_unix_p.h
-index 32c9de0..8a0a0e2 100644
+index df08080..b76bb8e 100644
 --- a/src/corelib/kernel/qeventdispatcher_unix_p.h
 +++ b/src/corelib/kernel/qeventdispatcher_unix_p.h
-@@ -53,35 +53,18 @@
+@@ -53,38 +53,21 @@
  #include "QtCore/qvarlengtharray.h"
  #include "private/qtimerinfo_unix_p.h"
- 
+
 -#if !defined(Q_OS_VXWORKS)
 -#  include <sys/time.h>
 -#  if (!defined(Q_OS_HPUX) || defined(__ia64)) && !defined(Q_OS_NACL)
@@ -1383,7 +1383,7 @@ index 32c9de0..8a0a0e2 100644
 -#endif
 -
  QT_BEGIN_NAMESPACE
- 
+
 -struct QSockNot
 -{
 -    QSocketNotifier *obj;
@@ -1391,7 +1391,7 @@ index 32c9de0..8a0a0e2 100644
 -    fd_set *queue;
 -};
 +class QEventDispatcherUNIXPrivate;
- 
+
 -class QSockNotType
 +struct Q_CORE_EXPORT QSocketNotifierSetUNIX Q_DECL_FINAL
  {
@@ -1399,7 +1399,7 @@ index 32c9de0..8a0a0e2 100644
 -    QSockNotType();
 -    ~QSockNotType();
 +    inline QSocketNotifierSetUNIX() Q_DECL_NOTHROW;
- 
+
 -    typedef QPodList<QSockNot*, 32> List;
 -
 -    List list;
@@ -1408,22 +1408,17 @@ index 32c9de0..8a0a0e2 100644
 -    fd_set pending_fds;
 +    inline bool isEmpty() const Q_DECL_NOTHROW;
 +    inline short events() const Q_DECL_NOTHROW;
- 
+
 +    QSocketNotifier *notifiers[3];
  };
- 
- #ifdef check
-@@ -89,7 +72,7 @@ public:
- #  undef check
- #endif
- 
+
 -class QEventDispatcherUNIXPrivate;
 +Q_DECLARE_TYPEINFO(QSocketNotifierSetUNIX, Q_PRIMITIVE_TYPE);
- 
+
  #ifdef Q_OS_QNX
  #  define FINAL_EXCEPT_BLACKBERRY
-@@ -125,15 +108,6 @@ public:
- 
+@@ -120,15 +103,6 @@ public:
+
  protected:
      QEventDispatcherUNIX(QEventDispatcherUNIXPrivate &dd, QObject *parent = 0);
 -
@@ -1436,12 +1431,12 @@ index 32c9de0..8a0a0e2 100644
 -                       fd_set *readfds, fd_set *writefds, fd_set *exceptfds,
 -                       timespec *timeout);
  };
- 
+
  class Q_CORE_EXPORT QEventDispatcherUNIXPrivate : public QAbstractEventDispatcherPrivate
-@@ -144,9 +118,13 @@ public:
+@@ -139,9 +113,13 @@ public:
      QEventDispatcherUNIXPrivate();
      ~QEventDispatcherUNIXPrivate();
- 
+
 -    int doSelect(QEventLoop::ProcessEventsFlags flags, timespec *timeout);
 -    virtual int initThreadWakeUp() FINAL_EXCEPT_BLACKBERRY;
 -    virtual int processThreadWakeUp(int nsel) FINAL_EXCEPT_BLACKBERRY;
@@ -1452,33 +1447,33 @@ index 32c9de0..8a0a0e2 100644
 +    void markPendingSocketNotifiers();
 +    int activateSocketNotifiers();
 +    void setSocketNotifierPending(QSocketNotifier *notifier);
- 
+
      bool mainThread;
- 
-@@ -154,15 +132,12 @@ public:
+
+@@ -149,15 +127,12 @@ public:
      // if thread_pipe[1] is -1, then eventfd(7) is in use and is stored in thread_pipe[0]
      int thread_pipe[2];
- 
+
 -    // highest fd for all socket notifiers
 -    int sn_highest;
 -    // 3 socket notifier types - read, write and exception
 -    QSockNotType sn_vec[3];
 +    QVector<pollfd> pollfds;
- 
+
 -    QTimerInfoList timerList;
 +    QHash<int, QSocketNotifierSetUNIX> socketNotifiers;
 +    QVector<QSocketNotifier *> pendingNotifiers;
- 
+
 -    // pending socket notifiers list
 -    QSockNotType::List sn_pending_list;
 +    QTimerInfoList timerList;
- 
+
      QAtomicInt wakeUps;
      QAtomicInt interrupt; // bool
-@@ -170,6 +145,34 @@ public:
- 
+@@ -165,6 +140,34 @@ public:
+
  #undef FINAL_EXCEPT_BLACKBERRY
- 
+
 +inline QSocketNotifierSetUNIX::QSocketNotifierSetUNIX() Q_DECL_NOTHROW
 +{
 +    notifiers[0] = 0;
@@ -1508,62 +1503,8 @@ index 32c9de0..8a0a0e2 100644
 +}
 +
  QT_END_NAMESPACE
- 
+
  #endif // QEVENTDISPATCHER_UNIX_P_H
-diff --git a/src/corelib/kernel/qeventdispatcher_unix_p.h.patch b/src/corelib/kernel/qeventdispatcher_unix_p.h.patch
-new file mode 100644
-index 0000000..ad568c9
---- /dev/null
-+++ b/src/corelib/kernel/qeventdispatcher_unix_p.h.patch
-@@ -0,0 +1,48 @@
-+--- src/corelib/kernel/qeventdispatcher_unix_p.h
-++++ src/corelib/kernel/qeventdispatcher_unix_p.h
-+@@ -53,38 +53,21 @@
-+ #include "QtCore/qvarlengtharray.h"
-+ #include "private/qtimerinfo_unix_p.h"
-+ 
-+-#if !defined(Q_OS_VXWORKS)
-+-#  include <sys/time.h>
-+-#  if (!defined(Q_OS_HPUX) || defined(__ia64)) && !defined(Q_OS_NACL)
-+-#    include <sys/select.h>
-+-#  endif
-+-#endif
-+-
-+ QT_BEGIN_NAMESPACE
-+ 
-+-struct QSockNot
-+-{
-+-    QSocketNotifier *obj;
-+-    int fd;
-+-    fd_set *queue;
-+-};
-++class QEventDispatcherUNIXPrivate;
-+ 
-+-class QSockNotType
-++struct Q_CORE_EXPORT QSocketNotifierSetUNIX Q_DECL_FINAL
-+ {
-+-public:
-+-    QSockNotType();
-+-    ~QSockNotType();
-++    inline QSocketNotifierSetUNIX() Q_DECL_NOTHROW;
-+ 
-+-    typedef QPodList<QSockNot*, 32> List;
-+-
-+-    List list;
-+-    fd_set select_fds;
-+-    fd_set enabled_fds;
-+-    fd_set pending_fds;
-++    inline bool isEmpty() const Q_DECL_NOTHROW;
-++    inline short events() const Q_DECL_NOTHROW;
-+ 
-++    QSocketNotifier *notifiers[3];
-+ };
-+ 
-+-class QEventDispatcherUNIXPrivate;
-++Q_DECLARE_TYPEINFO(QSocketNotifierSetUNIX, Q_PRIMITIVE_TYPE);
-+ 
-+ #ifdef Q_OS_QNX
-+ #  define FINAL_EXCEPT_BLACKBERRY
 diff --git a/src/corelib/kernel/qpoll.cpp b/src/corelib/kernel/qpoll.cpp
 new file mode 100644
 index 0000000..b152518
@@ -1880,14 +1821,14 @@ index a356e21..79b9b9c 100644
 --- a/src/network/socket/qlocalserver_unix.cpp
 +++ b/src/network/socket/qlocalserver_unix.cpp
 @@ -277,24 +277,27 @@ void QLocalServerPrivate::_q_onNewConnection()
- 
+
  void QLocalServerPrivate::waitForNewConnection(int msec, bool *timedOut)
  {
 -    fd_set readfds;
 -    FD_ZERO(&readfds);
 -    FD_SET(listenSocket, &readfds);
 +    pollfd pfd = qt_make_pollfd(listenSocket, POLLIN);
- 
+
 -    struct timespec timeout;
 -    timeout.tv_sec = msec / 1000;
 -    timeout.tv_nsec = (msec % 1000) * 1000 * 1000;
@@ -1902,7 +1843,7 @@ index a356e21..79b9b9c 100644
 +            _q_onNewConnection();
 +            return;
 +        }
- 
+
 -    int result = -1;
 -    result = qt_safe_select(listenSocket + 1, &readfds, 0, 0, (msec == -1) ? 0 : &timeout);
 -    if (-1 == result) {
@@ -1918,10 +1859,10 @@ index a356e21..79b9b9c 100644
 -    if (timedOut)
 -        *timedOut = (result == 0);
  }
- 
+
  void QLocalServerPrivate::setError(const QString &function)
 diff --git a/src/network/socket/qlocalsocket_unix.cpp b/src/network/socket/qlocalsocket_unix.cpp
-index bb0f11f..4b5686e 100644
+index bb0f11f..3e85217 100644
 --- a/src/network/socket/qlocalsocket_unix.cpp
 +++ b/src/network/socket/qlocalsocket_unix.cpp
 @@ -507,36 +507,25 @@ void QLocalSocket::setReadBufferSize(qint64 size)
@@ -1931,25 +1872,25 @@ index bb0f11f..4b5686e 100644
 +
      if (state() != ConnectingState)
          return (state() == ConnectedState);
- 
+
 -    fd_set fds;
 -    FD_ZERO(&fds);
 -    FD_SET(d->connectingSocket, &fds);
 +    QElapsedTimer timer;
 +    timer.start();
- 
+
 -    timeval timeout;
 -    timeout.tv_sec = msec / 1000;
 -    timeout.tv_usec = (msec % 1000) * 1000;
 +    pollfd pfd = qt_make_pollfd(d->connectingSocket, POLLIN);
- 
+
 -    // timeout can not be 0 or else select will return an error.
 -    if (0 == msec)
 -        timeout.tv_usec = 1000;
 +    do {
 +        const int timeout = (msec > 0) ? qMax(msec - timer.elapsed(), Q_INT64_C(0)) : msec;
 +        const int result = qt_poll_msecs(&pfd, 1, timeout);
- 
+
 -    int result = -1;
 -    // on Linux timeout will be updated by select, but _not_ on other systems.
 -    QElapsedTimer timer;
@@ -1970,15 +1911,15 @@ index bb0f11f..4b5686e 100644
              d->_q_connectToSocket();
 -    }
 +    } while (state() == ConnectingState && !timer.hasExpired(msec));
- 
+
      return (state() == ConnectedState);
  }
 diff --git a/src/network/socket/qnativesocketengine_unix.cpp b/src/network/socket/qnativesocketengine_unix.cpp
-index 1ce12ed..f8b3663 100644
+index 6a740f4..de86f27 100644
 --- a/src/network/socket/qnativesocketengine_unix.cpp
 +++ b/src/network/socket/qnativesocketengine_unix.cpp
-@@ -1257,47 +1257,36 @@ int QNativeSocketEnginePrivate::nativeSelect(int timeout, bool checkRead, bool c
- 
+@@ -1256,47 +1256,36 @@ int QNativeSocketEnginePrivate::nativeSelect(int timeout, bool checkRead, bool c
+
  int QNativeSocketEnginePrivate::nativeSelect(int timeout, bool selectForRead) const
  {
 -    fd_set fds;
@@ -1999,7 +1940,7 @@ index 1ce12ed..f8b3663 100644
 +    bool dummy;
 +    return nativeSelect(timeout, selectForRead, !selectForRead, &dummy, &dummy);
  }
- 
+
  int QNativeSocketEnginePrivate::nativeSelect(int timeout, bool checkRead, bool checkWrite,
                         bool *selectForRead, bool *selectForWrite) const
  {
@@ -2010,13 +1951,13 @@ index 1ce12ed..f8b3663 100644
      if (checkRead)
 -        FD_SET(socketDescriptor, &fdread);
 +        pfd.events |= POLLIN;
- 
+
 -    fd_set fdwrite;
 -    FD_ZERO(&fdwrite);
      if (checkWrite)
 -        FD_SET(socketDescriptor, &fdwrite);
 +        pfd.events |= POLLOUT;
- 
+
 -    struct timespec tv;
 -    tv.tv_sec = timeout / 1000;
 -    tv.tv_nsec = (timeout % 1000) * 1000 * 1000;
@@ -2024,7 +1965,7 @@ index 1ce12ed..f8b3663 100644
 -    int ret;
 -    ret = qt_safe_select(socketDescriptor + 1, &fdread, &fdwrite, 0, timeout < 0 ? 0 : &tv);
 +    const int ret = qt_poll_msecs(&pfd, 1, timeout);
- 
+
      if (ret <= 0)
          return ret;
 -    *selectForRead = FD_ISSET(socketDescriptor, &fdread);
@@ -2040,11 +1981,11 @@ index 1ce12ed..f8b3663 100644
 +
 +    *selectForRead = ((pfd.revents & read_flags) != 0);
 +    *selectForWrite = ((pfd.revents & write_flags) != 0);
- 
+
      return ret;
  }
 diff --git a/tests/auto/concurrent/qtconcurrentrun/tst_qtconcurrentrun.cpp b/tests/auto/concurrent/qtconcurrentrun/tst_qtconcurrentrun.cpp
-index 7e057f3..020fe52 100644
+index 8ffe4d8..c528891 100644
 --- a/tests/auto/concurrent/qtconcurrentrun/tst_qtconcurrentrun.cpp
 +++ b/tests/auto/concurrent/qtconcurrentrun/tst_qtconcurrentrun.cpp
 @@ -48,6 +48,7 @@ private slots:
@@ -2058,7 +1999,7 @@ index 7e057f3..020fe52 100644
 @@ -353,6 +354,33 @@ void tst_QtConcurrentRun::runWaitLoop()
          run(fn).waitForFinished();
  }
- 
+
 +static bool allFinished(const QList<QFuture<void> > &futures)
 +{
 +    auto hasNotFinished = [](const QFuture<void> &future) { return !future.isFinished(); };
@@ -2087,7 +2028,7 @@ index 7e057f3..020fe52 100644
 +}
 +
  QAtomicInt count;
- 
+
  void recursiveRun(int level)
 diff --git a/tests/auto/corelib/kernel/qeventloop/tst_qeventloop.cpp b/tests/auto/corelib/kernel/qeventloop/tst_qeventloop.cpp
 index c8bb4cd..9b2bada 100644
@@ -2095,7 +2036,7 @@ index c8bb4cd..9b2bada 100644
 +++ b/tests/auto/corelib/kernel/qeventloop/tst_qeventloop.cpp
 @@ -430,11 +430,8 @@ public slots:
          dataSent = serverSocket->waitForBytesWritten(-1);
- 
+
          if (dataSent) {
 -            fd_set fdread;
 -            int fd = socket->socketDescriptor();
@@ -2105,7 +2046,7 @@ index c8bb4cd..9b2bada 100644
 +            pollfd pfd = qt_make_pollfd(socket->socketDescriptor(), POLLIN);
 +            dataReadable = (1 == qt_safe_poll(&pfd, 1, nullptr));
          }
- 
+
          if (!dataReadable) {
 diff --git a/tests/manual/qt_poll/qt_poll.pro b/tests/manual/qt_poll/qt_poll.pro
 new file mode 100644
@@ -2282,32 +2223,32 @@ index 0000000..56e41e4
 +QTEST_APPLESS_MAIN(tst_qt_poll)
 +#include "tst_qt_poll.moc"
 diff --git a/tools/configure/configureapp.cpp b/tools/configure/configureapp.cpp
-index 88dcd81..9d41381 100644
+index 555ccbf..67a581a 100644
 --- a/tools/configure/configureapp.cpp
 +++ b/tools/configure/configureapp.cpp
-@@ -1749,6 +1749,7 @@ void Configure::applySpecSpecifics()
+@@ -1733,6 +1733,7 @@ void Configure::applySpecSpecifics()
          dictionary[ "QT_EVDEV" ]            = "no";
          dictionary[ "QT_MTDEV" ]            = "no";
          dictionary[ "FONT_CONFIG" ]         = "auto";
 +        dictionary[ "POLL" ]                = "poll";
          dictionary[ "ANGLE" ]               = "no";
- 
+
          dictionary["DECORATIONS"]           = "default windows styled";
-@@ -1776,6 +1777,7 @@ void Configure::applySpecSpecifics()
+@@ -1758,6 +1759,7 @@ void Configure::applySpecSpecifics()
          dictionary[ "QT_XKBCOMMON" ]        = "no";
          dictionary["ANDROID_STYLE_ASSETS"]  = "yes";
          dictionary[ "STYLE_ANDROID" ]       = "yes";
 +        dictionary[ "POLL" ]                = "poll";
      }
  }
- 
-@@ -3094,6 +3096,9 @@ void Configure::generateOutputVars()
+
+@@ -3049,6 +3051,9 @@ void Configure::generateOutputVars()
      if (dictionary["REDUCE_EXPORTS"] == "yes")
          qtConfig += "reduce_exports";
- 
+
 +    if (!dictionary["POLL"].isEmpty())
 +        qtConfig += "poll_" + dictionary["POLL"];
 +
      // We currently have no switch for QtConcurrent, so add it unconditionally.
      qtConfig += "concurrent";
- 
+

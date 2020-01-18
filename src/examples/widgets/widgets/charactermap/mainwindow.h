@@ -63,18 +63,18 @@ public:
     MainWindow();
 
 public slots:
-    void filterChanged(int);
     void findStyles(const QFont &font);
     void findSizes(const QFont &font);
     void insertCharacter(const QString &character);
 #ifndef QT_NO_CLIPBOARD
     void updateClipboard();
 #endif
-    void showInfo();
 
 private:
     CharacterWidget *characterWidget;
-    QComboBox *filterCombo;
+#ifndef QT_NO_CLIPBOARD
+    QClipboard *clipboard;
+#endif
     QComboBox *styleCombo;
     QComboBox *sizeCombo;
     QFontComboBox *fontCombo;

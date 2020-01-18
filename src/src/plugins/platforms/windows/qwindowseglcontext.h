@@ -271,8 +271,6 @@ public:
 
 private:
     explicit QWindowsEGLStaticContext(EGLDisplay display);
-    static bool initializeAngle(QWindowsOpenGLTester::Renderers preferredType, HDC dc,
-                                EGLDisplay *display, EGLint *major, EGLint *minor);
 
     const EGLDisplay m_display;
 };

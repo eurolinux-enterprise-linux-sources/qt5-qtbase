@@ -949,14 +949,17 @@ private:
 void tst_QStyle::testStyleOptionInit()
 {
     QStringList keys = QStyleFactory::keys();
-    keys.prepend(QString()); // QCommonStyle marker
+    QVector<QStyle*> styles;
+    styles.reserve(keys.size() + 1);
 
-    Q_FOREACH (const QString &key, keys) {
-        QStyle* style = key.isEmpty() ? new QCommonStyle : QStyleFactory::create(key);
+    styles << new QCommonStyle();
+
+    Q_FOREACH (QStyle *style, styles) {
         TestStyleOptionInitProxy testStyle;
         testStyle.setBaseStyle(style);
         testAllFunctions(style);
         QVERIFY(!testStyle.invalidOptionsDetected);
+        delete style;
     }
 }
 

@@ -105,8 +105,9 @@ QEvdevMouseHandler::QEvdevMouseHandler(const QString &device, int fd, bool abs, 
         m_abs = getHardwareMaximum();
 
     // socket notifier for events on the mouse device
-    m_notify = new QSocketNotifier(m_fd, QSocketNotifier::Read, this);
-    connect(m_notify, SIGNAL(activated(int)), this, SLOT(readMouseData()));
+    QSocketNotifier *notifier;
+    notifier = new QSocketNotifier(m_fd, QSocketNotifier::Read, this);
+    connect(notifier, SIGNAL(activated(int)), this, SLOT(readMouseData()));
 }
 
 QEvdevMouseHandler::~QEvdevMouseHandler()
@@ -195,14 +196,6 @@ void QEvdevMouseHandler::readMouseData()
         } else if (result < 0) {
             if (errno != EINTR && errno != EAGAIN) {
                 qErrnoWarning(errno, "evdevmouse: Could not read from input device");
-                // If the device got disconnected, stop reading, otherwise we get flooded
-                // by the above error over and over again.
-                if (errno == ENODEV) {
-                    delete m_notify;
-                    m_notify = Q_NULLPTR;
-                    qt_safe_close(m_fd);
-                    m_fd = -1;
-                }
                 return;
             }
         } else {

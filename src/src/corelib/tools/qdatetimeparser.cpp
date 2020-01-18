@@ -1712,9 +1712,11 @@ QDateTime QDateTimeParser::getMaximum() const
 
 QString QDateTimeParser::getAmPmText(AmPm ap, Case cs) const
 {
-    const QLocale loc = locale();
-    QString raw = ap == AmText ? loc.amText() : loc.pmText();
-    return cs == UpperCase ? raw.toUpper() : raw.toLower();
+    if (ap == AmText) {
+        return (cs == UpperCase ? tr("AM") : tr("am"));
+    } else {
+        return (cs == UpperCase ? tr("PM") : tr("pm"));
+    }
 }
 
 /*

@@ -206,12 +206,6 @@ void QCoreTextFontDatabase::populateFontDatabase()
         if (familyName.startsWith(QLatin1Char('.')) || familyName == QLatin1String("LastResort"))
             continue;
 
-#if defined(Q_OS_IOS) || defined(Q_OS_TVOS)
-        // Skip font families with no corresponding fonts
-        if (![UIFont fontNamesForFamilyName:(NSString*)familyNameRef].count)
-            continue;
-#endif
-
         QPlatformFontDatabase::registerFontFamily(familyName);
 
 #if defined(Q_OS_OSX)
@@ -588,7 +582,8 @@ QStringList QCoreTextFontDatabase::fallbacksForFamily(const QString &family, QFo
                     fallbackList.append(familyNameFromPostScriptName(item));
             }
 
-            fallbackList.append(QLatin1String("Apple Color Emoji"));
+            if (QCoreTextFontEngine::supportsColorGlyphs())
+                fallbackList.append(QLatin1String("Apple Color Emoji"));
 
             // Since we are only returning a list of default fonts for the current language, we do not
             // cover all unicode completely. This was especially an issue for some of the common script

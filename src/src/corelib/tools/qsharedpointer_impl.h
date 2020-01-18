@@ -486,14 +486,14 @@ private:
 
     void deref() Q_DECL_NOTHROW
     { deref(d); }
-    static void deref(Data *dd) Q_DECL_NOTHROW
+    static void deref(Data *d) Q_DECL_NOTHROW
     {
-        if (!dd) return;
-        if (!dd->strongref.deref()) {
-            dd->destroy();
+        if (!d) return;
+        if (!d->strongref.deref()) {
+            d->destroy();
         }
-        if (!dd->weakref.deref())
-            delete dd;
+        if (!d->weakref.deref())
+            delete d;
     }
 
     template <class X>

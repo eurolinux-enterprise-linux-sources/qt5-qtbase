@@ -14,7 +14,6 @@ SOURCES = \
     qwinrtbackingstore.cpp \
     qwinrtclipboard.cpp \
     qwinrtcursor.cpp \
-    qwinrtdrag.cpp \
     qwinrteglcontext.cpp \
     qwinrteventdispatcher.cpp \
     qwinrtfiledialoghelper.cpp \
@@ -33,7 +32,6 @@ HEADERS = \
     qwinrtbackingstore.h \
     qwinrtclipboard.h \
     qwinrtcursor.h \
-    qwinrtdrag.h \
     qwinrteglcontext.h \
     qwinrteventdispatcher.h \
     qwinrtfiledialoghelper.h \
@@ -48,15 +46,6 @@ HEADERS = \
     qwinrtwindow.h
 
 OTHER_FILES += winrt.json
-
-WINRT_SDK_VERSION_STRING = $$(UCRTVersion)
-WINRT_SDK_VERSION = $$member($$list($$split(WINRT_SDK_VERSION_STRING, .)), 2)
-lessThan(WINRT_SDK_VERSION, 14322): DEFINES += QT_WINRT_LIMITED_DRAGANDDROP
-
-*-msvc2013|contains(DEFINES, QT_NO_DRAGANDDROP) {
-    SOURCES -= qwinrtdrag.cpp
-    HEADERS -= qwinrtdrag.h
-}
 
 PLUGIN_TYPE = platforms
 PLUGIN_CLASS_NAME = QWinRTIntegrationPlugin

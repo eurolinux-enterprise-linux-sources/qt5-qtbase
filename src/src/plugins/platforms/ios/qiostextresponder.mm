@@ -353,7 +353,6 @@
 
 - (void)sendKeyPressRelease:(Qt::Key)key modifiers:(Qt::KeyboardModifiers)modifiers
 {
-    QScopedValueRollback<BOOL> rollback(m_inSendEventToFocusObject, true);
     QWindowSystemInterface::handleKeyEvent(qApp->focusWindow(), QEvent::KeyPress, key, modifiers);
     QWindowSystemInterface::handleKeyEvent(qApp->focusWindow(), QEvent::KeyRelease, key, modifiers);
     QWindowSystemInterface::flushWindowSystemEvents();
@@ -908,7 +907,7 @@
     UIFont *uifont = [UIFont fontWithName:qfont.family().toNSString() size:qfont.pointSize()];
     if (!uifont)
         return [NSDictionary dictionary];
-    return [NSDictionary dictionaryWithObject:uifont forKey:NSFontAttributeName];
+    return [NSDictionary dictionaryWithObject:uifont forKey:UITextInputTextFontKey];
 }
 
 - (NSDictionary *)markedTextStyle

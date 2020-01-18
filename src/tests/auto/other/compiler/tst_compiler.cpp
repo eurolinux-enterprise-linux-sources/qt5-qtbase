@@ -636,10 +636,9 @@ void tst_Compiler::cxx11_alignas()
 #ifndef Q_COMPILER_ALIGNAS
     QSKIP("Compiler does not support C++11 feature");
 #else
-    struct S {
-        alignas(double) char c;
-    };
-    QCOMPARE(Q_ALIGNOF(S), Q_ALIGNOF(double));
+    alignas(double) char c;
+    Q_UNUSED(c);
+    QCOMPARE(Q_ALIGNOF(c), Q_ALIGNOF(double));
 #endif
 }
 

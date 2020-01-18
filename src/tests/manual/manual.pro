@@ -4,7 +4,6 @@ SUBDIRS = bearerex \
 filetest \
 foreignwindows \
 gestures \
-highdpi \
 inputmethodhints \
 keypadnavigation \
 lance \

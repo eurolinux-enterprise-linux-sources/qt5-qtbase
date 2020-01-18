@@ -215,10 +215,11 @@ public:
     }
     void setGeometry(const QRect&r) Q_DECL_OVERRIDE
     {
-        static_cast<QDockWidgetGroupWindow *>(parent())->destroyOrHideIfEmpty();
         QDockAreaLayoutInfo *li = layoutInfo();
-        if (li->isEmpty())
+        if (li->isEmpty()) {
+            static_cast<QDockWidgetGroupWindow *>(parent())->destroyIfEmpty();
             return;
+        }
         int fw = frameWidth();
         li->reparentWidgets(parentWidget());
         li->rect = r.adjusted(fw, fw, -fw, -fw);
@@ -270,10 +271,6 @@ bool QDockWidgetGroupWindow::event(QEvent *e)
     case QEvent::ChildAdded:
         if (qobject_cast<QDockWidget *>(static_cast<QChildEvent*>(e)->child()))
             adjustFlags();
-        break;
-    case QEvent::LayoutRequest:
-        // We might need to show the widget again
-        destroyOrHideIfEmpty();
         break;
     default:
         break;
@@ -328,43 +325,34 @@ QDockWidget *QDockWidgetGroupWindow::topDockWidget() const
 }
 
 /*! \internal
-    Destroy or hide this window if there is no more QDockWidget in it.
-    Otherwise make sure it is shown.
+    Destroy this window if there is no more QDockWidget in it.
  */
-void QDockWidgetGroupWindow::destroyOrHideIfEmpty()
+void QDockWidgetGroupWindow::destroyIfEmpty()
 {
-    if (!layoutInfo()->isEmpty()) {
-        show(); // It might have been hidden,
-        return;
-    }
-    // There might still be placeholders
-    if (!layoutInfo()->item_list.isEmpty()) {
-        hide();
-        return;
-    }
-
-    // Make sure to reparent the possibly floating or hidden QDockWidgets to the parent
-    foreach (QDockWidget *dw, findChildren<QDockWidget *>(QString(), Qt::FindDirectChildrenOnly)) {
-        bool wasFloating = dw->isFloating();
-        bool wasHidden = dw->isHidden();
-        dw->setParent(parentWidget());
-        if (wasFloating) {
-            dw->setFloating(true);
-        } else {
-            // maybe it was hidden, we still have to put it back in the main layout.
-            QMainWindowLayout *ml =
-                qt_mainwindow_layout(static_cast<QMainWindow *>(parentWidget()));
-            Qt::DockWidgetArea area = ml->dockWidgetArea(this);
-            if (area == Qt::NoDockWidgetArea)
-                area = Qt::LeftDockWidgetArea;
-            static_cast<QMainWindow *>(parentWidget())->addDockWidget(area, dw);
+    if (layoutInfo()->isEmpty()) {
+        // Make sure to reparent the possibly floating or hidden QDockWidgets to the parent
+        foreach (QDockWidget *dw,
+                 findChildren<QDockWidget *>(QString(), Qt::FindDirectChildrenOnly)) {
+            bool wasFloating = dw->isFloating();
+            bool wasHidden = dw->isHidden();
+            dw->setParent(parentWidget());
+            if (wasFloating) {
+                dw->setFloating(true);
+            } else {
+                // maybe it was hidden, we still have to put it back in the main layout.
+                QMainWindowLayout *ml = qt_mainwindow_layout(static_cast<QMainWindow*>(parentWidget()));
+                Qt::DockWidgetArea area = ml->dockWidgetArea(this);
+                if (area == Qt::NoDockWidgetArea)
+                    area = Qt::LeftDockWidgetArea;
+                static_cast<QMainWindow*>(parentWidget())->addDockWidget(area, dw);
+            }
+            if (!wasHidden)
+                dw->show();
         }
-        if (!wasHidden)
-            dw->show();
+        foreach (QTabBar *tb, findChildren<QTabBar *>(QString(), Qt::FindDirectChildrenOnly))
+            tb->setParent(parentWidget());
+        deleteLater();
     }
-    foreach (QTabBar *tb, findChildren<QTabBar *>(QString(), Qt::FindDirectChildrenOnly))
-        tb->setParent(parentWidget());
-    deleteLater();
 }
 
 /*! \internal
@@ -2087,7 +2075,7 @@ void QMainWindowLayout::animationFinished(QWidget *widget)
                 item.subinfo->reparentWidgets(parentWidget());
                 item.subinfo->setTabBarShape(parentInfo->tabBarShape);
             }
-            dwgw->destroyOrHideIfEmpty();
+            dwgw->destroyIfEmpty();
         }
 
         if (QDockWidget *dw = qobject_cast<QDockWidget*>(widget)) {
@@ -2378,10 +2366,13 @@ void QMainWindowLayout::hover(QLayoutItem *widgetItem, const QPoint &mousePos)
             QWidget *w = qobject_cast<QWidget*>(c);
             if (!w)
                 continue;
+            if (w == widget)
+                continue;
+            if (!w->isTopLevel() || !w->isVisible() || w->isMinimized())
+                continue;
             if (!qobject_cast<QDockWidget*>(w) && !qobject_cast<QDockWidgetGroupWindow *>(w))
                 continue;
-            if (w != widget && w->isTopLevel() && w->isVisible() && !w->isMinimized())
-                candidates << w;
+            candidates << w;
             if (QDockWidgetGroupWindow *group = qobject_cast<QDockWidgetGroupWindow *>(w)) {
                 // Sometimes, there are floating QDockWidget that have a QDockWidgetGroupWindow as a parent.
                 foreach (QObject *c, group->children()) {

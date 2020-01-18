@@ -160,15 +160,16 @@ void QDebug::putUcs4(uint ucs4)
 {
     maybeQuote('\'');
     if (ucs4 < 0x20) {
-        stream->ts << "\\x" << hex << ucs4 << reset;
+        stream->ts << hex << "\\x" << ucs4 << reset;
     } else if (ucs4 < 0x80) {
         stream->ts << char(ucs4);
     } else {
+        stream->ts << hex << qSetPadChar(QLatin1Char('0'));
         if (ucs4 < 0x10000)
-            stream->ts << "\\u" << qSetFieldWidth(4);
+            stream->ts << qSetFieldWidth(4) << "\\u";
         else
-            stream->ts << "\\U" << qSetFieldWidth(8);
-        stream->ts << hex << qSetPadChar(QLatin1Char('0')) << ucs4 << reset;
+            stream->ts << qSetFieldWidth(8) << "\\U";
+        stream->ts << ucs4 << reset;
     }
     maybeQuote('\'');
 }

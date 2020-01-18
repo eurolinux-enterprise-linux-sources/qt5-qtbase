@@ -148,7 +148,7 @@ public:
     qintptr socketDescriptor;
 
     bool notifyOnRead, notifyOnWrite, notifyOnException;
-    QAtomicInt closingDown;
+    bool closingDown;
 
     enum ErrorString {
         NonBlockingInitFailedErrorString,
@@ -214,7 +214,8 @@ private:
                               ABI::Windows::Networking::Sockets::IDatagramSocketMessageReceivedEventArgs *args);
     HRESULT handleClientConnection(ABI::Windows::Networking::Sockets::IStreamSocketListener *tcpListener,
                                    ABI::Windows::Networking::Sockets::IStreamSocketListenerConnectionReceivedEventArgs *args);
-    HRESULT handleConnectOpFinished(ABI::Windows::Foundation::IAsyncAction *, ABI::Windows::Foundation::AsyncStatus);
+    HRESULT handleConnectToHost(ABI::Windows::Foundation::IAsyncAction *, ABI::Windows::Foundation::AsyncStatus);
+    void handleConnectionEstablished(ABI::Windows::Foundation::IAsyncAction *action);
     HRESULT handleReadyRead(ABI::Windows::Foundation::IAsyncOperationWithProgress<ABI::Windows::Storage::Streams::IBuffer *, UINT32> *asyncInfo, ABI::Windows::Foundation::AsyncStatus);
 };
 

@@ -181,13 +181,7 @@ bool QStringListModel::setData(const QModelIndex &index, const QVariant &value, 
     if (index.row() >= 0 && index.row() < lst.size()
         && (role == Qt::EditRole || role == Qt::DisplayRole)) {
         lst.replace(index.row(), value.toString());
-        QVector<int> roles;
-        roles.reserve(2);
-        roles.append(Qt::DisplayRole);
-        roles.append(Qt::EditRole);
-        emit dataChanged(index, index, roles);
-        // once Q_COMPILER_UNIFORM_INIT can be used, change to:
-        // emit dataChanged(index, index, {Qt::DisplayRole, Qt::EditRole});
+        emit dataChanged(index, index, QVector<int>() << role);
         return true;
     }
     return false;
@@ -307,9 +301,9 @@ QStringList QStringListModel::stringList() const
 */
 void QStringListModel::setStringList(const QStringList &strings)
 {
-    beginResetModel();
+    emit beginResetModel();
     lst = strings;
-    endResetModel();
+    emit endResetModel();
 }
 
 /*!

@@ -6,7 +6,7 @@
 and semantics are as close as possible to those of the Perl 5 language.
 
                        Written by Philip Hazel
-           Copyright (c) 1997-2016 University of Cambridge
+           Copyright (c) 1997-2014 University of Cambridge
 
 -----------------------------------------------------------------------------
 Redistribution and use in source and binary forms, with or without
@@ -485,7 +485,7 @@ static const char error_texts[] =
   "lookbehind assertion is not fixed length\0"
   "malformed number or name after (?(\0"
   "conditional group contains more than two branches\0"
-  "assertion expected after (?( or (?(?C)\0"
+  "assertion expected after (?(\0"
   "(?R or (?[+-]digits must be followed by )\0"
   /* 30 */
   "unknown POSIX class name\0"
@@ -560,7 +560,6 @@ static const char error_texts[] =
   /* 85 */
   "parentheses are too deeply nested (stack check)\0"
   "digits missing in \\x{} or \\o{}\0"
-  "regular expression is too complicated\0"
   ;
 
 /* Table to identify digits and hex digits. This is used when compiling
@@ -4567,10 +4566,6 @@ for (;; ptr++)
   pcre_uint32 ec;
   pcre_uchar mcbuffer[8];
 
-  /* Come here to restart the loop without advancing the pointer. */
-
-  REDO_LOOP:
-
   /* Get next character in the pattern */
 
   c = *ptr;
@@ -4596,8 +4591,7 @@ for (;; ptr++)
     if (code > cd->start_workspace + cd->workspace_size -
         WORK_SIZE_SAFETY_MARGIN)                       /* Check for overrun */
       {
-      *errorcodeptr = (code >= cd->start_workspace + cd->workspace_size)?
-        ERR52 : ERR87;
+      *errorcodeptr = ERR52;
       goto FAILED;
       }
 
@@ -4716,7 +4710,11 @@ for (;; ptr++)
     /* If we skipped any characters, restart the loop. Otherwise, we didn't see
     a comment. */
 
-    if (ptr > wscptr) goto REDO_LOOP;
+    if (ptr > wscptr)
+      {
+      ptr--;
+      continue;
+      }
     }
 
   /* Skip over (?# comments. We need to do this here because we want to know if
@@ -4857,15 +4855,15 @@ for (;; ptr++)
     if (STRNCMP_UC_C8(ptr+1, STRING_WEIRD_STARTWORD, 6) == 0)
       {
       nestptr = ptr + 7;
-      ptr = sub_start_of_word;
-      goto REDO_LOOP;
+      ptr = sub_start_of_word - 1;
+      continue;
       }
 
     if (STRNCMP_UC_C8(ptr+1, STRING_WEIRD_ENDWORD, 6) == 0)
       {
       nestptr = ptr + 7;
-      ptr = sub_end_of_word;
-      goto REDO_LOOP;
+      ptr = sub_end_of_word - 1;
+      continue;
       }
 
     /* Handle a real character class. */
@@ -6628,21 +6626,8 @@ for (;; ptr++)
             cd->had_accept = TRUE;
             for (oc = cd->open_caps; oc != NULL; oc = oc->next)
               {
-              if (lengthptr != NULL)
-                {
-#ifdef COMPILE_PCRE8
-                *lengthptr += 1 + IMM2_SIZE;
-#elif defined COMPILE_PCRE16
-                *lengthptr += 2 + IMM2_SIZE;
-#elif defined COMPILE_PCRE32
-                *lengthptr += 4 + IMM2_SIZE;
-#endif
-                }
-              else
-                {
-                *code++ = OP_CLOSE;
-                PUT2INC(code, 0, oc->number);
-                }
+              *code++ = OP_CLOSE;
+              PUT2INC(code, 0, oc->number);
               }
             setverb = *code++ =
               (cd->assert_depth > 0)? OP_ASSERT_ACCEPT : OP_ACCEPT;
@@ -6771,15 +6756,6 @@ for (;; ptr++)
           for (i = 3;; i++) if (!IS_DIGIT(ptr[i])) break;
           if (ptr[i] == CHAR_RIGHT_PARENTHESIS)
             tempptr += i + 1;
-
-          /* tempptr should now be pointing to the opening parenthesis of the
-          assertion condition. */
-
-          if (*tempptr != CHAR_LEFT_PARENTHESIS)
-            {
-            *errorcodeptr = ERR28;
-            goto FAILED;
-            }
           }
 
         /* For conditions that are assertions, check the syntax, and then exit
@@ -7320,12 +7296,7 @@ for (;; ptr++)
           so far in order to get the number. If the name is not found, leave
           the value of recno as 0 for a forward reference. */
 
-          /* This patch (removing "else") fixes a problem when a reference is
-          to multiple identically named nested groups from within the nest.
-          Once again, it is not the "proper" fix, and it results in an
-          over-allocation of memory. */
-
-          /* else */
+          else
             {
             ng = cd->named_groups;
             for (i = 0; i < cd->names_found; i++, ng++)

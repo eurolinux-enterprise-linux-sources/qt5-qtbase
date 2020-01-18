@@ -52,15 +52,17 @@ BuildRequires: pkgconfig(libsystemd)
 %global tests 1
 %endif
 
+#define prerelease rc
+
 Summary: Qt5 - QtBase components
 Name:    qt5-qtbase
-Version: 5.6.2
-Release: 1%{?dist}
+Version: 5.6.1
+Release: 10%{?prerelease:.%{prerelease}}%{?dist}
 
 # See LGPL_EXCEPTIONS.txt, for exception details
 License: LGPLv2 with exceptions or GPLv3 with exceptions
 Url: http://qt-project.org/
-Source0: http://download.qt.io/official_releases/qt/5.6/%{version}/submodules/%{qt_module}-opensource-src-%{version}.tar.xz
+Source0: http://download.qt.io/official_releases/qt/5.6/%{version}%{?prerelease:-%{prerelease}}/submodules/%{qt_module}-opensource-src-%{version}%{?prerelease:-%{prerelease}}.tar.xz
 
 # https://bugzilla.redhat.com/show_bug.cgi?id=1227295
 Source1: qtlogging.ini
@@ -77,7 +79,10 @@ Source6: 10-qt5-check-opengl2.sh
 Patch2: qtbase-multilib_optflags.patch
 
 # fix QTBUG-35459 (too low entityCharacterLimit=1024 for CVE-2013-4549)
-Patch4: qtbase-opensource-src-5.6.2-QTBUG-35459.patch
+Patch4: qtbase-opensource-src-5.3.2-QTBUG-35459.patch
+
+# unconditionally enable freetype lcdfilter support
+Patch12: qtbase-opensource-src-5.2.0-enable_ft_lcdfilter.patch
 
 # upstreamable patches
 # support poll
@@ -90,11 +95,11 @@ Patch50: qt5-poll.patch
 Patch52: qtbase-opensource-src-5.6.0-moc_WORDSIZE.patch
 
 # arm patch
-Patch54: qtbase-opensource-src-5.6.2-arm.patch
+Patch54: qtbase-opensource-src-5.6.0-arm.patch
 
 # recently passed code review, not integrated yet
 # https://codereview.qt-project.org/126102/
-Patch60: qtbase-opensource-src-5.6.2-moc_system_defines.patch
+Patch60: moc-get-the-system-defines-from-the-compiler-itself.patch
 
 # drop -O3 and make -O2 by default
 Patch61: qt5-qtbase-cxxflag.patch
@@ -349,9 +354,10 @@ RPM macros for building Qt5 packages.
 
 
 %prep
-%setup -q -n %{qt_module}-opensource-src-%{version}
+%setup -q -n %{qt_module}-opensource-src-%{version}%{?prerelease:-%{prerelease}}
 
 %patch4 -p1 -b .QTBUG-35459
+%patch12 -p1 -b .enable_ft_lcdfilter
 
 %patch50 -p1 -b .qt5-poll.patch
 %patch52 -p1 -b .moc_WORDSIZE
@@ -383,6 +389,9 @@ sed -i -e "s|^\(QMAKE_LFLAGS_RELEASE.*\)|\1 $RPM_LD_FLAGS|" \
 sed -i -e 's|^\(QMAKE_STRIP.*=\).*$|\1|g' mkspecs/common/linux.conf
 %endif
 
+%if 0%{?prerelease}
+bin/syncqt.pl -version %{version}
+%endif
 
 # move some bundled libs to ensure they're not accidentally used
 pushd src/3rdparty
@@ -921,8 +930,6 @@ fi
 %{_qt5_libdir}/cmake/Qt5Gui/Qt5Gui_QEglFSX11IntegrationPlugin.cmake
 %{_qt5_libdir}/cmake/Qt5Gui/Qt5Gui_QXcbEglIntegrationPlugin.cmake
 %endif
-%{_qt5_plugindir}/egldeviceintegrations/libqeglfs-kms-egldevice-integration.so
-%{_qt5_libdir}/cmake/Qt5Gui/Qt5Gui_QEglFSKmsEglDeviceIntegrationPlugin.cmake
 %{_qt5_plugindir}/platforms/libqlinuxfb.so
 %{_qt5_plugindir}/platforms/libqminimal.so
 %{_qt5_plugindir}/platforms/libqoffscreen.so
@@ -943,10 +950,6 @@ fi
 
 
 %changelog
-* Wed Jan 11 2017 Jan Grulich <jgrulich@redhat.com> - 5.6.2-1
-- Update to 5.6.2
-  Resolves: bz#1384812
-
 * Tue Aug 30 2016 Jan Grulich <jgrulich@redhat.com> - 5.6.1-10
 - Increase build version to have newer version than in EPEL
   Resolves: bz#1317396

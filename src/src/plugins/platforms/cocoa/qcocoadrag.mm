@@ -34,9 +34,6 @@
 #include "qcocoadrag.h"
 #include "qmacclipboard.h"
 #include "qcocoahelpers.h"
-#ifndef QT_NO_WIDGETS
-#include <QtWidgets/qwidget.h>
-#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -184,18 +181,7 @@ QPixmap QCocoaDrag::dragPixmap(QDrag *drag, QPoint &hotSpot) const
                 const int width = fm.width(s);
                 const int height = fm.height();
                 if (width > 0 && height > 0) {
-                    qreal dpr = 1.0;
-                    if (const QWindow *sourceWindow = qobject_cast<QWindow *>(drag->source())) {
-                        dpr = sourceWindow->devicePixelRatio();
-                    }
-#ifndef QT_NO_WIDGETS
-                    else if (const QWidget *sourceWidget = qobject_cast<QWidget *>(drag->source())) {
-                        if (const QWindow *sourceWindow = sourceWidget->window()->windowHandle())
-                            dpr = sourceWindow->devicePixelRatio();
-                    }
-#endif
-                    pm = QPixmap(width * dpr, height * dpr);
-                    pm.setDevicePixelRatio(dpr);
+                    pm = QPixmap(width, height);
                     QPainter p(&pm);
                     p.fillRect(0, 0, pm.width(), pm.height(), Qt::color0);
                     p.setPen(Qt::color1);

@@ -62,6 +62,7 @@ class tst_QImageWriter : public QObject
 
 public:
     tst_QImageWriter();
+    virtual ~tst_QImageWriter();
 
 public slots:
     void init();
@@ -164,6 +165,16 @@ void tst_QImageWriter::getSetCheck()
 
 tst_QImageWriter::tst_QImageWriter()
 {
+}
+
+tst_QImageWriter::~tst_QImageWriter()
+{
+    QDir dir(prefix);
+    QStringList filesToDelete = dir.entryList(QStringList() << "gen-*" , QDir::NoDotAndDotDot | QDir::Files);
+    foreach( QString file, filesToDelete) {
+        QFile::remove(dir.absoluteFilePath(file));
+    }
+
 }
 
 void tst_QImageWriter::init()

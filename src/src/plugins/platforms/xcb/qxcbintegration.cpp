@@ -254,8 +254,7 @@ bool QXcbIntegration::hasCapability(QPlatformIntegration::Capability cap) const
     case ForeignWindows: return true;
     case SyncState: return true;
     case RasterGLSurface: return true;
-    case SwitchableWidgetComposition: return m_connections.at(0)->glIntegration()
-                                          && m_connections.at(0)->glIntegration()->supportsSwitchableWidgetComposition();
+    case SwitchableWidgetComposition: return true;
     default: return QPlatformIntegration::hasCapability(cap);
     }
 }

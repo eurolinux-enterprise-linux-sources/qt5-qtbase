@@ -50,7 +50,7 @@ QT_BEGIN_NAMESPACE
 static QByteArray cleaned(const QByteArray &input)
 {
     QByteArray result;
-    result.resize(input.size());
+    result.reserve(input.size());
     const char *data = input.constData();
     const char *end = input.constData() + input.size();
     char *output = result.data();
@@ -78,15 +78,13 @@ static QByteArray cleaned(const QByteArray &input)
                 if (data != end && (*(data + 1) == '\n' || (*data) == '\r')) {
                     ++newlines;
                     data += 1;
-                    if (data != end && *data != '\r')
+                    if (*data != '\r')
                         data += 1;
                     continue;
                 }
             } else if (*data == '\r' && *(data + 1) == '\n') { // reduce \r\n to \n
                 ++data;
             }
-            if (data == end)
-                break;
 
             char ch = *data;
             if (ch == '\r') // os9: replace \r with \n
@@ -188,8 +186,7 @@ Symbols Preprocessor::tokenize(const QByteArray& input, int lineNum, Preprocesso
                 token = keywords[state].ident;
 
             if (token == NOTOKEN) {
-                if (*data)
-                    ++data;
+                ++data;
                 // an error really, but let's ignore this input
                 // to not confuse moc later. However in pre-processor
                 // only mode let's continue.
@@ -362,6 +359,7 @@ Symbols Preprocessor::tokenize(const QByteArray& input, int lineNum, Preprocesso
                     ++data;
                     continue;
                 }
+
                 int nextindex = pp_keywords[state].next;
                 int next = 0;
                 if (*data == pp_keywords[state].defchar)
@@ -380,8 +378,7 @@ Symbols Preprocessor::tokenize(const QByteArray& input, int lineNum, Preprocesso
 
             switch (token) {
             case NOTOKEN:
-                if (*data)
-                    ++data;
+                ++data;
                 break;
             case PP_DEFINE:
                 mode = PrepareDefine;
@@ -1252,6 +1249,7 @@ void Preprocessor::parseDefineArguments(Macro *m)
                     error("missing ')' in macro argument list");
                 break;
             } else if (!is_identifier(l.constData(), l.length())) {
+                qDebug() << l;
                 error("Unexpected character in macro argument list.");
             }
         }

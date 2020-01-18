@@ -56,7 +56,6 @@ typedef IEventHandler<IInspectable *> ContentChangedHandler;
 QT_BEGIN_NAMESPACE
 
 QWinRTClipboard::QWinRTClipboard()
-    : m_mimeData(Q_NULLPTR)
 {
 #ifndef Q_OS_WINPHONE
     QEventDispatcherWinRT::runOnXamlThread([this]() {
@@ -101,16 +100,9 @@ QMimeData *QWinRTClipboard::mimeData(QClipboard::Mode mode)
     const wchar_t *textStr = result.GetRawBuffer(&size);
     QString text = QString::fromWCharArray(textStr, size);
     text.replace(QStringLiteral("\r\n"), QStringLiteral("\n"));
+    m_mimeData.setText(text);
 
-    if (m_mimeData) {
-        if (m_mimeData->text() == text)
-            return m_mimeData;
-        delete m_mimeData;
-    }
-    m_mimeData = new QMimeData();
-    m_mimeData->setText(text);
-
-    return m_mimeData;
+    return &m_mimeData;
 #else // Q_OS_WINPHONE
     return QPlatformClipboard::mimeData(mode);
 #endif // Q_OS_WINPHONE
@@ -151,13 +143,7 @@ void QWinRTClipboard::setMimeData(QMimeData *data, QClipboard::Mode mode)
         return;
 
 #ifndef Q_OS_WINPHONE
-    const bool newData = !m_mimeData || m_mimeData != data;
-    if (newData) {
-        if (m_mimeData)
-            delete m_mimeData;
-        m_mimeData = data;
-    }
-    const QString text = data ? data->text() : QString();
+    const QString text = data->text();
     HRESULT hr = QEventDispatcherWinRT::runOnXamlThread([this, text]() {
         HRESULT hr;
         ComPtr<IDataPackage> package;
@@ -175,6 +161,7 @@ void QWinRTClipboard::setMimeData(QMimeData *data, QClipboard::Mode mode)
         return S_OK;
     });
     RETURN_VOID_IF_FAILED("Could not set clipboard text.");
+    emitChanged(mode);
 #else // Q_OS_WINPHONE
     QPlatformClipboard::setMimeData(data, mode);
 #endif // Q_OS_WINPHONE

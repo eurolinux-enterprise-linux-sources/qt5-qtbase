@@ -351,9 +351,8 @@ void QWindowsFontEngineDirectWrite::recalcAdvances(QGlyphLayout *glyphs, QFontEn
                                                               glyphIndices.size(),
                                                               glyphMetrics.data());
     if (SUCCEEDED(hr)) {
-        qreal stretch = fontDef.stretch / 100.0;
         for (int i = 0; i < glyphs->numGlyphs; ++i)
-            glyphs->advances[i] = DESIGN_TO_LOGICAL(glyphMetrics[i].advanceWidth * stretch);
+            glyphs->advances[i] = DESIGN_TO_LOGICAL(glyphMetrics[i].advanceWidth);
         if (fontDef.styleStrategy & QFont::ForceIntegerMetrics) {
             for (int i = 0; i < glyphs->numGlyphs; ++i)
                 glyphs->advances[i] = glyphs->advances[i].round();
@@ -436,7 +435,7 @@ glyph_metrics_t QWindowsFontEngineDirectWrite::boundingBox(glyph_t g)
                                width,
                                height,
                                advanceWidth,
-                               0);
+                               advanceHeight);
     } else {
         qErrnoWarning("%s: GetDesignGlyphMetrics failed", __FUNCTION__);
     }
@@ -510,7 +509,7 @@ bool QWindowsFontEngineDirectWrite::supportsSubPixelPositions() const
 QImage QWindowsFontEngineDirectWrite::imageForGlyph(glyph_t t,
                                              QFixed subPixelPosition,
                                              int margin,
-                                             const QTransform &originalTransform)
+                                             const QTransform &xform)
 {
     UINT16 glyphIndex = t;
     FLOAT glyphAdvance = 0;
@@ -528,10 +527,6 @@ QImage QWindowsFontEngineDirectWrite::imageForGlyph(glyph_t t,
     glyphRun.isSideways = false;
     glyphRun.bidiLevel = 0;
     glyphRun.glyphOffsets = &glyphOffset;
-
-    QTransform xform = originalTransform;
-    if (fontDef.stretch != 100)
-        xform.scale(fontDef.stretch / 100.0, 1.0);
 
     DWRITE_MATRIX transform;
     transform.dx = subPixelPosition.toReal();
@@ -669,15 +664,10 @@ QString QWindowsFontEngineDirectWrite::fontNameSubstitute(const QString &familyN
 
 glyph_metrics_t QWindowsFontEngineDirectWrite::alphaMapBoundingBox(glyph_t glyph,
                                                                    QFixed subPixelPosition,
-                                                                   const QTransform &originalTransform,
+                                                                   const QTransform &matrix,
                                                                    GlyphFormat format)
 {
     Q_UNUSED(format);
-
-    QTransform matrix = originalTransform;
-    if (fontDef.stretch != 100)
-        matrix.scale(fontDef.stretch / 100.0, 1.0);
-
     glyph_metrics_t bbox = QFontEngine::boundingBox(glyph, matrix); // To get transformed advance
 
     UINT16 glyphIndex = glyph;

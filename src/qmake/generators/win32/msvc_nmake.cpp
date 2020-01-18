@@ -409,14 +409,11 @@ void NmakeMakefileGenerator::init()
         project->values("QMAKE_DISTCLEAN").append(tgt + ".lib");
     }
     if (project->isActiveConfig("debug_info")) {
-        // Add the compiler's PDB file.
-        QString pdbfile = var("OBJECTS_DIR") + project->first("TARGET") + ".vc.pdb";
+        QString pdbfile = tgt + ".pdb";
         QString escapedPdbFile = escapeFilePath(pdbfile);
         project->values("QMAKE_CFLAGS").append("/Fd" + escapedPdbFile);
         project->values("QMAKE_CXXFLAGS").append("/Fd" + escapedPdbFile);
-        project->values("QMAKE_CLEAN").append(pdbfile);
-        // Add the linker's PDB file to the distclean target.
-        project->values("QMAKE_DISTCLEAN").append(tgt + ".pdb");
+        project->values("QMAKE_DISTCLEAN").append(pdbfile);
     }
     if (project->isActiveConfig("debug")) {
         project->values("QMAKE_CLEAN").append(tgt + ".ilk");
@@ -425,12 +422,6 @@ void NmakeMakefileGenerator::init()
         ProStringList &defines = project->values("DEFINES");
         if (!defines.contains("NDEBUG"))
             defines.append("NDEBUG");
-    }
-
-    if (project->values("QMAKE_APP_FLAG").isEmpty() && project->isActiveConfig("dll")) {
-        ProStringList &defines = project->values("DEFINES");
-        if (!defines.contains("_WINDLL"))
-            defines.append("_WINDLL");
     }
 }
 

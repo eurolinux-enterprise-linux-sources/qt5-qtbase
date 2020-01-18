@@ -65,7 +65,7 @@ public:
 
     void syncSeparatorsCollapsible(bool enable) Q_DECL_OVERRIDE;
 
-    void propagateEnabledState(bool enabled);
+    void syncModalState(bool modal);
 
     void setIcon(const QIcon &icon) Q_DECL_OVERRIDE { Q_UNUSED(icon) }
 
@@ -87,9 +87,6 @@ public:
     void setAttachedItem(NSMenuItem *item);
     NSMenuItem *attachedItem() const;
 
-    bool isOpen() const;
-    void setIsOpen(bool isOpen);
-
 private:
     QCocoaMenuItem *itemOrNull(int index) const;
     void insertNative(QCocoaMenuItem *item, QCocoaMenuItem *beforeItem);
@@ -97,11 +94,9 @@ private:
     QList<QCocoaMenuItem *> m_menuItems;
     NSMenu *m_nativeMenu;
     NSMenuItem *m_attachedItem;
+    bool m_enabled;
+    bool m_visible;
     quintptr m_tag;
-    bool m_enabled:1;
-    bool m_parentEnabled:1;
-    bool m_visible:1;
-    bool m_isOpen:1;
 };
 
 QT_END_NAMESPACE

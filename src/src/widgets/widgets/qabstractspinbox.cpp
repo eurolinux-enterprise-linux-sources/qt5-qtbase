@@ -751,7 +751,8 @@ bool QAbstractSpinBox::event(QEvent *event)
     case QEvent::HoverEnter:
     case QEvent::HoverLeave:
     case QEvent::HoverMove:
-        d->updateHoverControl(static_cast<const QHoverEvent *>(event)->pos());
+        if (const QHoverEvent *he = static_cast<const QHoverEvent *>(event))
+            d->updateHoverControl(he->pos());
         break;
     case QEvent::ShortcutOverride:
         if (d->edit->event(event))
@@ -1083,8 +1084,6 @@ void QAbstractSpinBox::keyPressEvent(QKeyEvent *event)
     }
 
     d->edit->event(event);
-    if (!d->edit->text().isEmpty())
-        d->cleared = false;
     if (!isVisible())
         d->ignoreUpdateEdit = true;
 }

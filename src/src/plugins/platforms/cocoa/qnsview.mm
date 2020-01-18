@@ -469,8 +469,7 @@ QT_WARNING_POP
             NSUInteger screenIndex = [[NSScreen screens] indexOfObject:self.window.screen];
             if (screenIndex != NSNotFound) {
                 QCocoaScreen *cocoaScreen = QCocoaIntegration::instance()->screenAtIndex(screenIndex);
-                if (cocoaScreen)
-                    QWindowSystemInterface::handleWindowScreenChanged(m_window, cocoaScreen->screen());
+                QWindowSystemInterface::handleWindowScreenChanged(m_window, cocoaScreen->screen());
                 m_platformWindow->updateExposedGeometry();
             }
         }
@@ -881,7 +880,7 @@ QT_WARNING_POP
     if (m_window && (m_window->flags() & Qt::WindowTransparentForInput) )
         return [super mouseDragged:theEvent];
     if (!(m_buttons & (m_sendUpAsRightButton ? Qt::RightButton : Qt::LeftButton)))
-        qCDebug(lcQpaCocoaWindow, "QNSView mouseDragged: Internal mouse button tracking invalid (missing Qt::LeftButton)");
+        qWarning("QNSView mouseDragged: Internal mouse button tracking invalid (missing Qt::LeftButton)");
     [self handleMouseEvent:theEvent];
 }
 
@@ -1020,7 +1019,7 @@ QT_WARNING_POP
     if (m_window && (m_window->flags() & Qt::WindowTransparentForInput) )
         return [super rightMouseDragged:theEvent];
     if (!(m_buttons & Qt::RightButton))
-        qCDebug(lcQpaCocoaWindow, "QNSView rightMouseDragged: Internal mouse button tracking invalid (missing Qt::RightButton)");
+        qWarning("QNSView rightMouseDragged: Internal mouse button tracking invalid (missing Qt::RightButton)");
     [self handleMouseEvent:theEvent];
 }
 
@@ -1046,7 +1045,7 @@ QT_WARNING_POP
     if (m_window && (m_window->flags() & Qt::WindowTransparentForInput) )
         return [super otherMouseDragged:theEvent];
     if (!(m_buttons & ~(Qt::LeftButton | Qt::RightButton)))
-        qCDebug(lcQpaCocoaWindow, "QNSView otherMouseDragged: Internal mouse button tracking invalid (missing Qt::MiddleButton or Qt::ExtraButton*)");
+        qWarning("QNSView otherMouseDragged: Internal mouse button tracking invalid (missing Qt::MiddleButton or Qt::ExtraButton*)");
     [self handleMouseEvent:theEvent];
 }
 
@@ -1913,27 +1912,16 @@ static QPoint mapWindowCoordinates(QWindow *source, QWindow *target, QPoint poin
     return target->mapFromGlobal(source->mapToGlobal(point));
 }
 
-- (NSDragOperation)draggingSession:(NSDraggingSession *)session
-  sourceOperationMaskForDraggingContext:(NSDraggingContext)context
+- (NSDragOperation) draggingSourceOperationMaskForLocal:(BOOL)isLocal
 {
-    Q_UNUSED(session);
-    Q_UNUSED(context);
+    Q_UNUSED(isLocal);
     QCocoaDrag* nativeDrag = QCocoaIntegration::instance()->drag();
     return qt_mac_mapDropActions(nativeDrag->currentDrag()->supportedActions());
 }
 
-- (BOOL)ignoreModifierKeysForDraggingSession:(NSDraggingSession *)session
+- (BOOL) ignoreModifierKeysWhileDragging
 {
-    Q_UNUSED(session);
-    // According to the "Dragging Sources" chapter on Cocoa DnD Programming
-    // (https://developer.apple.com/library/mac/documentation/Cocoa/Conceptual/DragandDrop/Concepts/dragsource.html),
-    // if the control, option, or command key is pressed, the source’s
-    // operation mask is filtered to only contain a reduced set of operations.
-    //
-    // Since Qt already takes care of tracking the keyboard modifiers, we
-    // don't need (or want) Cocoa to filter anything. Instead, we'll let
-    // the application do the actual filtering.
-    return YES;
+    return NO;
 }
 
 - (BOOL)wantsPeriodicDraggingUpdates
@@ -2078,27 +2066,23 @@ static QPoint mapWindowCoordinates(QWindow *source, QWindow *target, QPoint poin
     return response.isAccepted();
 }
 
-- (void)draggingSession:(NSDraggingSession *)session
-           endedAtPoint:(NSPoint)screenPoint
-              operation:(NSDragOperation)operation
+- (void)draggedImage:(NSImage*) img endedAt:(NSPoint) point operation:(NSDragOperation) operation
 {
-    Q_UNUSED(session);
+    Q_UNUSED(img);
     Q_UNUSED(operation);
     QWindow *target = findEventTargetWindow(m_window);
     if (!target)
         return;
 
-    // keep our state, and QGuiApplication state (buttons member) in-sync,
-    // or future mouse events will be processed incorrectly
-    NSUInteger pmb = [NSEvent pressedMouseButtons];
-    for (int buttonNumber = 0; buttonNumber < 32; buttonNumber++) { // see cocoaButton2QtButton() for the 32 value
-        if (!(pmb & (1 << buttonNumber)))
-            m_buttons &= ~cocoaButton2QtButton(buttonNumber);
-    }
+// keep our state, and QGuiApplication state (buttons member) in-sync,
+// or future mouse events will be processed incorrectly
+    m_buttons &= ~(m_sendUpAsRightButton ? Qt::RightButton : Qt::LeftButton);
 
-    NSPoint windowPoint = [self.window convertRectFromScreen:NSMakeRect(screenPoint.x, screenPoint.y, 1, 1)].origin;
+    NSPoint windowPoint = [self convertPoint: point fromView: nil];
     QPoint qtWindowPoint(windowPoint.x, windowPoint.y);
 
+    NSWindow *window = [self window];
+    NSPoint screenPoint = [window convertRectToScreen:NSMakeRect(point.x, point.y, 0, 0)].origin;
     QPoint qtScreenPoint = QPoint(screenPoint.x, qt_mac_flipYCoordinate(screenPoint.y));
 
     QWindowSystemInterface::handleMouseEvent(target, mapWindowCoordinates(m_window, target, qtWindowPoint), qtScreenPoint, m_buttons);

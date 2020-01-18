@@ -835,11 +835,8 @@ QPixmap QIcon::pixmap(QWindow *window, const QSize &size, Mode mode, State state
     qreal devicePixelRatio = qt_effective_device_pixel_ratio(window);
 
     // Handle the simple normal-dpi case:
-    if (!(devicePixelRatio > 1.0)) {
-        QPixmap pixmap = d->engine->pixmap(size, mode, state);
-        pixmap.setDevicePixelRatio(1.0);
-        return pixmap;
-    }
+    if (!(devicePixelRatio > 1.0))
+        return d->engine->pixmap(size, mode, state);
 
     // Try get a pixmap that is big enough to be displayed at device pixel resolution.
     QPixmap pixmap = d->engine->pixmap(size * devicePixelRatio, mode, state);
@@ -1226,7 +1223,7 @@ void QIcon::setIsMask(bool isMask)
 
     Returns \c true if this icon has been marked as a mask image.
     Certain platforms render mask icons differently (for example,
-    menu icons on \macos).
+    menu icons on OS X).
 
     \sa setIsMask()
 */

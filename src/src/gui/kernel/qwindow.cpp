@@ -204,8 +204,6 @@ QWindow::~QWindow()
 {
     destroy();
     QGuiApplicationPrivate::window_list.removeAll(this);
-    if (!QGuiApplicationPrivate::is_app_closing)
-        QGuiApplicationPrivate::instance()->modalWindowList.removeOne(this);
 }
 
 void QWindowPrivate::init()
@@ -2160,9 +2158,6 @@ void QWindowPrivate::deliverUpdateRequest()
 */
 void QWindow::requestUpdate()
 {
-    Q_ASSERT_X(QThread::currentThread() == QCoreApplication::instance()->thread(),
-        "QWindow", "Updates can only be scheduled from the GUI (main) thread");
-
     Q_D(QWindow);
     if (d->updateRequestPending || !d->platformWindow)
         return;

@@ -105,8 +105,7 @@ public:
     void removeNativeEventFilter(QAbstractNativeEventFilter *filterObj);
     bool filterNativeEvent(const QByteArray &eventType, void *message, long *result);
 #if QT_DEPRECATED_SINCE(5, 0)
-    QT_DEPRECATED bool filterEvent(void *message)
-    { return filterNativeEvent("", message, Q_NULLPTR); }
+    QT_DEPRECATED bool filterEvent(void *message) { return filterNativeEvent("", message, 0); }
 #endif
 
 Q_SIGNALS:

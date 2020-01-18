@@ -48,10 +48,8 @@ QT_BEGIN_NAMESPACE
 class QComboBox;
 class QDialogButtonBox;
 class QLabel;
-class QPlainTextEdit;
-class QPushButton;
-class QTabWidget;
 class QTextCodec;
+class QTextEdit;
 QT_END_NAMESPACE
 
 class PreviewForm : public QDialog
@@ -59,7 +57,7 @@ class PreviewForm : public QDialog
     Q_OBJECT
 
 public:
-    explicit PreviewForm(QWidget *parent = Q_NULLPTR);
+    PreviewForm(QWidget *parent = 0);
 
     void setCodecList(const QList<QTextCodec *> &list);
     void setEncodedData(const QByteArray &data);
@@ -69,17 +67,13 @@ private slots:
     void updateTextEdit();
 
 private:
-    void reset();
-
     QByteArray encodedData;
     QString decodedStr;
 
-    QPushButton *okButton;
-    QTabWidget *tabWidget;
     QComboBox *encodingComboBox;
-    QPlainTextEdit *textEdit;
-    QPlainTextEdit *hexDumpEdit;
-    QLabel *statusLabel;
+    QLabel *encodingLabel;
+    QTextEdit *textEdit;
+    QDialogButtonBox *buttonBox;
 };
 
 #endif

@@ -79,7 +79,7 @@ extern "C" { // Otherwise it won't find CWKeychain* symbols at link time
     [locker lock];
     QMacAutoReleasePool pool;
     notificationCenter = [NSNotificationCenter defaultCenter];
-    currentInterface = [CWInterface interface];
+    currentInterface = [CWInterface interfaceWithName:nil];
     [notificationCenter addObserver:self selector:@selector(notificationHandler:) name:CWPowerDidChangeNotification object:nil];
     [locker unlock];
     return self;

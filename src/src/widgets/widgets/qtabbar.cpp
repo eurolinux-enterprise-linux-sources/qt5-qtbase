@@ -134,59 +134,60 @@ void QTabBarPrivate::updateMacBorderMetrics()
 }
 
 /*!
-    \internal
-    This is basically QTabBar::initStyleOption() but
-    without the expensive QFontMetrics::elidedText() call.
-*/
+    Initialize \a option with the values from the tab at \a tabIndex. This method
+    is useful for subclasses when they need a QStyleOptionTab,
+    but don't want to fill in all the information themselves.
 
-void QTabBarPrivate::initBasicStyleOption(QStyleOptionTab *option, int tabIndex) const
+    \sa QStyleOption::initFrom(), QTabWidget::initStyleOption()
+*/
+void QTabBar::initStyleOption(QStyleOptionTab *option, int tabIndex) const
 {
-    Q_Q(const QTabBar);
-    const int totalTabs = tabList.size();
+    Q_D(const QTabBar);
+    int totalTabs = d->tabList.size();
 
     if (!option || (tabIndex < 0 || tabIndex >= totalTabs))
         return;
 
-    const QTabBarPrivate::Tab &tab = tabList.at(tabIndex);
-    option->initFrom(q);
+    const QTabBarPrivate::Tab &tab = d->tabList.at(tabIndex);
+    option->initFrom(this);
     option->state &= ~(QStyle::State_HasFocus | QStyle::State_MouseOver);
-    option->rect = q->tabRect(tabIndex);
-    const bool isCurrent = tabIndex == currentIndex;
+    option->rect = tabRect(tabIndex);
+    bool isCurrent = tabIndex == d->currentIndex;
     option->row = 0;
-    if (tabIndex == pressedIndex)
+    if (tabIndex == d->pressedIndex)
         option->state |= QStyle::State_Sunken;
     if (isCurrent)
         option->state |= QStyle::State_Selected;
-    if (isCurrent && q->hasFocus())
+    if (isCurrent && hasFocus())
         option->state |= QStyle::State_HasFocus;
     if (!tab.enabled)
         option->state &= ~QStyle::State_Enabled;
-    if (q->isActiveWindow())
+    if (isActiveWindow())
         option->state |= QStyle::State_Active;
-    if (!dragInProgress && option->rect == hoverRect)
+    if (!d->dragInProgress && option->rect == d->hoverRect)
         option->state |= QStyle::State_MouseOver;
-    option->shape = shape;
+    option->shape = d->shape;
     option->text = tab.text;
 
     if (tab.textColor.isValid())
-        option->palette.setColor(q->foregroundRole(), tab.textColor);
+        option->palette.setColor(foregroundRole(), tab.textColor);
 
     option->icon = tab.icon;
-    option->iconSize = q->iconSize();  // Will get the default value then.
+    option->iconSize = iconSize();  // Will get the default value then.
 
     option->leftButtonSize = tab.leftWidget ? tab.leftWidget->size() : QSize();
     option->rightButtonSize = tab.rightWidget ? tab.rightWidget->size() : QSize();
-    option->documentMode = documentMode;
+    option->documentMode = d->documentMode;
 
-    if (tabIndex > 0 && tabIndex - 1 == currentIndex)
+    if (tabIndex > 0 && tabIndex - 1 == d->currentIndex)
         option->selectedPosition = QStyleOptionTab::PreviousIsSelected;
-    else if (tabIndex + 1 < totalTabs && tabIndex + 1 == currentIndex)
+    else if (tabIndex + 1 < totalTabs && tabIndex + 1 == d->currentIndex)
         option->selectedPosition = QStyleOptionTab::NextIsSelected;
     else
         option->selectedPosition = QStyleOptionTab::NotAdjacent;
 
-    const bool paintBeginning = (tabIndex == 0) || (dragInProgress && tabIndex == pressedIndex + 1);
-    const bool paintEnd = (tabIndex == totalTabs - 1) || (dragInProgress && tabIndex == pressedIndex - 1);
+    bool paintBeginning = (tabIndex == 0) || (d->dragInProgress && tabIndex == d->pressedIndex + 1);
+    bool paintEnd = (tabIndex == totalTabs - 1) || (d->dragInProgress && tabIndex == d->pressedIndex - 1);
     if (paintBeginning) {
         if (paintEnd)
             option->position = QStyleOptionTab::OnlyOneTab;
@@ -199,7 +200,7 @@ void QTabBarPrivate::initBasicStyleOption(QStyleOptionTab *option, int tabIndex)
     }
 
 #ifndef QT_NO_TABWIDGET
-    if (const QTabWidget *tw = qobject_cast<const QTabWidget *>(q->parentWidget())) {
+    if (const QTabWidget *tw = qobject_cast<const QTabWidget *>(parentWidget())) {
         option->features |= QStyleOptionTab::HasFrame;
         if (tw->cornerWidget(Qt::TopLeftCorner) || tw->cornerWidget(Qt::BottomLeftCorner))
             option->cornerWidgets |= QStyleOptionTab::LeftCornerWidget;
@@ -207,19 +208,6 @@ void QTabBarPrivate::initBasicStyleOption(QStyleOptionTab *option, int tabIndex)
             option->cornerWidgets |= QStyleOptionTab::RightCornerWidget;
     }
 #endif
-}
-
-/*!
-    Initialize \a option with the values from the tab at \a tabIndex. This method
-    is useful for subclasses when they need a QStyleOptionTab,
-    but don't want to fill in all the information themselves.
-
-    \sa QStyleOption::initFrom(), QTabWidget::initStyleOption()
-*/
-void QTabBar::initStyleOption(QStyleOptionTab *option, int tabIndex) const
-{
-    Q_D(const QTabBar);
-    d->initBasicStyleOption(option, tabIndex);
 
     QRect textRect = style()->subElementRect(QStyle::SE_TabBarTabText, option, this);
     option->text = fontMetrics().elidedText(option->text, d->elideMode, textRect.width(),
@@ -1032,7 +1020,6 @@ void QTabBar::setTabText(int index, const QString &text)
 {
     Q_D(QTabBar);
     if (QTabBarPrivate::Tab *tab = d->at(index)) {
-        d->textSizes.remove(tab->text);
         tab->text = text;
 #ifndef QT_NO_SHORTCUT
         releaseShortcut(tab->shortcutId);
@@ -1392,7 +1379,7 @@ QSize QTabBar::tabSizeHint(int index) const
     Q_D(const QTabBar);
     if (const QTabBarPrivate::Tab *tab = d->at(index)) {
         QStyleOptionTab opt;
-        d->initBasicStyleOption(&opt, index);
+        initStyleOption(&opt, index);
         opt.text = d->tabList.at(index).text;
         QSize iconSize = tab->icon.isNull() ? QSize(0, 0) : opt.iconSize;
         int hframe = style()->pixelMetric(QStyle::PM_TabBarTabHSpace, &opt, this);
@@ -1418,16 +1405,13 @@ QSize QTabBar::tabSizeHint(int index) const
         if (!opt.icon.isNull())
             padding += 4;
 
-        QHash<QString, QSize>::iterator it = d->textSizes.find(tab->text);
-        if (it == d->textSizes.end())
-           it = d->textSizes.insert(tab->text, fm.size(Qt::TextShowMnemonic, tab->text));
-        const int textWidth = it.value().width();
         QSize csz;
         if (verticalTabs(d->shape)) {
             csz = QSize( qMax(maxWidgetWidth, qMax(fm.height(), iconSize.height())) + vframe,
-                         textWidth + iconSize.width() + hframe + widgetHeight + padding);
+                    fm.size(Qt::TextShowMnemonic, tab->text).width() + iconSize.width() + hframe + widgetHeight + padding);
         } else {
-            csz = QSize(textWidth + iconSize.width() + hframe + widgetWidth + padding,
+            csz = QSize(fm.size(Qt::TextShowMnemonic, tab->text).width() + iconSize.width() + hframe
+                  + widgetWidth + padding,
                   qMax(maxWidgetHeight, qMax(fm.height(), iconSize.height())) + vframe);
         }
 
@@ -2087,21 +2071,15 @@ void QTabBarPrivate::setCurrentNextEnabledIndex(int offset)
 void QTabBar::changeEvent(QEvent *event)
 {
     Q_D(QTabBar);
-    switch (event->type()) {
-    case QEvent::StyleChange:
+    if (event->type() == QEvent::StyleChange) {
         if (!d->elideModeSetByUser)
             d->elideMode = Qt::TextElideMode(style()->styleHint(QStyle::SH_TabBar_ElideMode, 0, this));
         if (!d->useScrollButtonsSetByUser)
             d->useScrollButtons = !style()->styleHint(QStyle::SH_TabBar_PreferNoArrows, 0, this);
-        // fallthrough
-    case QEvent::FontChange:
-        d->textSizes.clear();
         d->refresh();
-        break;
-    default:
-        break;
+    } else if (event->type() == QEvent::FontChange) {
+        d->refresh();
     }
-
     QWidget::changeEvent(event);
 }
 
@@ -2144,7 +2122,6 @@ void QTabBar::setElideMode(Qt::TextElideMode mode)
     Q_D(QTabBar);
     d->elideMode = mode;
     d->elideModeSetByUser = true;
-    d->textSizes.clear();
     d->refresh();
 }
 
@@ -2335,7 +2312,7 @@ void QTabBar::setMovable(bool movable)
     \since 4.5
 
     This property is used as a hint for styles to draw the tabs in a different
-    way then they would normally look in a tab widget.  On \macos this will
+    way then they would normally look in a tab widget.  On OS X this will
     look similar to the tabs in Safari or Leopard's Terminal.app.
 
     \sa QTabWidget::documentMode

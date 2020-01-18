@@ -201,10 +201,8 @@ QPlatformOffscreenSurface *QXcbGlxIntegration::createPlatformOffscreenSurface(QO
             display = static_cast<Display *>(m_connection->xlib_display());
 #endif
         const char *glxvendor = glXGetClientString(display, GLX_VENDOR);
-        if (glxvendor) {
-            if (!strcmp(glxvendor, "ATI") || !strcmp(glxvendor, "Chromium"))
-                glxPbufferUsable = false;
-        }
+        if (glxvendor && !strcmp(glxvendor, "ATI"))
+            glxPbufferUsable = false;
     }
     if (glxPbufferUsable)
         return new QGLXPbuffer(surface);
@@ -216,27 +214,6 @@ QPlatformOffscreenSurface *QXcbGlxIntegration::createPlatformOffscreenSurface(QO
 bool QXcbGlxIntegration::supportsThreadedOpenGL() const
 {
     return QGLXContext::supportsThreading();
-}
-
-bool QXcbGlxIntegration::supportsSwitchableWidgetComposition() const
-{
-    static bool vendorChecked = false;
-    static bool isSwitchableWidgetCompositionAvailable = true;
-    if (!vendorChecked) {
-        vendorChecked = true;
-        Display *display = glXGetCurrentDisplay();
-#ifdef XCB_USE_XLIB
-        if (!display)
-            display = static_cast<Display *>(m_connection->xlib_display());
-#endif
-        const char *glxvendor = glXGetClientString(display, GLX_VENDOR);
-        if (glxvendor) {
-            if (!strcmp(glxvendor, "Parallels Inc"))
-                isSwitchableWidgetCompositionAvailable = false;
-        }
-    }
-
-    return isSwitchableWidgetCompositionAvailable;
 }
 
 

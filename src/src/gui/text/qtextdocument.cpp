@@ -1309,7 +1309,7 @@ QTextCursor QTextDocument::find(const QString &subString, int from, FindFlags op
     //do not include the character given in the position.
     if (options & FindBackward) {
         --pos ;
-        if (pos < 0)
+        if (pos < subString.size())
             return QTextCursor();
     }
 

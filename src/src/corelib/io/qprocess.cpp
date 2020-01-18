@@ -1892,7 +1892,7 @@ void QProcess::setProcessState(ProcessState state)
 
 /*!
   This function is called in the child process context just before the
-    program is executed on Unix or \macos (i.e., after \c fork(), but before
+    program is executed on Unix or OS X (i.e., after \c fork(), but before
     \c execve()). Reimplement this function to do last minute initialization
     of the child process. Example:
 
@@ -1903,7 +1903,7 @@ void QProcess::setProcessState(ProcessState state)
     execution, your workaround is to emit finished() and then call
     exit().
 
-    \warning This function is called by QProcess on Unix and \macos
+    \warning This function is called by QProcess on Unix and OS X
     only. On Windows and QNX, it is not called.
 */
 void QProcess::setupChildProcess()
@@ -2090,7 +2090,10 @@ void QProcess::start(const QString &program, const QStringList &arguments, OpenM
         return;
     }
     if (program.isEmpty()) {
-        d->setErrorAndEmit(QProcess::FailedToStart, tr("No program defined"));
+        Q_D(QProcess);
+        d->processError = QProcess::FailedToStart;
+        setErrorString(tr("No program defined"));
+        emit error(d->processError);
         return;
     }
 
@@ -2117,7 +2120,10 @@ void QProcess::start(OpenMode mode)
         return;
     }
     if (d->program.isEmpty()) {
-        d->setErrorAndEmit(QProcess::FailedToStart, tr("No program defined"));
+        Q_D(QProcess);
+        d->processError = QProcess::FailedToStart;
+        setErrorString(tr("No program defined"));
+        emit error(d->processError);
         return;
     }
 
@@ -2357,7 +2363,7 @@ void QProcess::setArguments(const QStringList &arguments)
 
     On Windows, terminate() posts a WM_CLOSE message to all top-level windows
     of the process and then to the main thread of the process itself. On Unix
-    and \macos the \c SIGTERM signal is sent.
+    and OS X the \c SIGTERM signal is sent.
 
     Console applications on Windows that do not run an event loop, or whose
     event loop does not handle the WM_CLOSE message, can only be terminated by
@@ -2374,7 +2380,7 @@ void QProcess::terminate()
 /*!
     Kills the current process, causing it to exit immediately.
 
-    On Windows, kill() uses TerminateProcess, and on Unix and \macos, the
+    On Windows, kill() uses TerminateProcess, and on Unix and OS X, the
     SIGKILL signal is sent to the process.
 
     \sa terminate()

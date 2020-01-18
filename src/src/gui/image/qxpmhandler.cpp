@@ -74,7 +74,7 @@ static const int xpmRgbTblSize = 657;
 
 static const struct XPMRGBData {
     uint  value;
-    const char name[21];
+    const char *name;
 } xpmRgbTbl[] = {
   { QRGB(240,248,255),  "aliceblue" },
   { QRGB(250,235,215),  "antiquewhite" },

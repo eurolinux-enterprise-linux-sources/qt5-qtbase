@@ -324,16 +324,17 @@
 
 - (void)willRotateToInterfaceOrientation:(UIInterfaceOrientation)orientation duration:(NSTimeInterval)duration
 {
-    self.changingOrientation = YES;
+    Q_UNUSED(orientation);
+    Q_UNUSED(duration);
 
-    [super willRotateToInterfaceOrientation:orientation duration:duration];
+    self.changingOrientation = YES;
 }
 
 - (void)didRotateFromInterfaceOrientation:(UIInterfaceOrientation)orientation
 {
-    self.changingOrientation = NO;
+    Q_UNUSED(orientation);
 
-    [super didRotateFromInterfaceOrientation:orientation];
+    self.changingOrientation = NO;
 }
 
 - (void)willChangeStatusBarFrame:(NSNotification*)notification

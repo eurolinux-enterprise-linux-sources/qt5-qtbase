@@ -403,7 +403,9 @@ QVariant QMacPasteboardMimeUnicodeText::convertToMime(const QString &mimetype, Q
     // I can only handle two types (system and unicode) so deal with them that way
     QVariant ret;
     if (flavor == QLatin1String("public.utf8-plain-text")) {
-        ret = QString::fromUtf8(firstData);
+        ret = QString(QCFString(CFStringCreateWithBytes(kCFAllocatorDefault,
+                                             reinterpret_cast<const UInt8 *>(firstData.constData()),
+                                             firstData.size(), CFStringGetSystemEncoding(), false)));
     } else if (flavor == QLatin1String("public.utf16-plain-text")) {
         ret = QString(reinterpret_cast<const QChar *>(firstData.constData()),
                       firstData.size() / sizeof(QChar));
@@ -746,7 +748,7 @@ bool QMacPasteboardMimeVCard::canConvert(const QString &mime, QString flav)
 
 QString QMacPasteboardMimeVCard::flavorFor(const QString &mime)
 {
-    if (mime.startsWith(QLatin1String("text/vcard")))
+    if (mime.startsWith(QLatin1String("text/plain")))
         return QLatin1String("public.vcard");
     return QString();
 }
@@ -754,14 +756,14 @@ QString QMacPasteboardMimeVCard::flavorFor(const QString &mime)
 QString QMacPasteboardMimeVCard::mimeFor(QString flav)
 {
     if (flav == QLatin1String("public.vcard"))
-        return QLatin1String("text/vcard");
+        return QLatin1String("text/plain");
     return QString();
 }
 
 QVariant QMacPasteboardMimeVCard::convertToMime(const QString &mime, QList<QByteArray> data, QString)
 {
     QByteArray cards;
-    if (mime == QLatin1String("text/vcard")) {
+    if (mime == QLatin1String("text/plain")) {
         for (int i=0; i<data.size(); ++i)
             cards += data[i];
     }
@@ -771,7 +773,7 @@ QVariant QMacPasteboardMimeVCard::convertToMime(const QString &mime, QList<QByte
 QList<QByteArray> QMacPasteboardMimeVCard::convertFromMime(const QString &mime, QVariant data, QString)
 {
     QList<QByteArray> ret;
-    if (mime == QLatin1String("text/vcard"))
+    if (mime == QLatin1String("text/plain"))
         ret.append(data.toString().toUtf8());
     return ret;
 }

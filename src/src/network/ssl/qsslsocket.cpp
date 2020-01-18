@@ -49,8 +49,7 @@
     QSslSocket establishes a secure, encrypted TCP connection you can
     use for transmitting encrypted data. It can operate in both client
     and server mode, and it supports modern SSL protocols, including
-    SSL 3 and TLS 1.2. By default, QSslSocket uses only SSL protocols
-    which are considered to be secure (QSsl::SecureProtocols), but you can
+    SSLv3 and TLSv1_0. By default, QSslSocket uses TLSv1_0, but you can
     change the SSL protocol by calling setProtocol() as long as you do
     it before the handshake has started.
 
@@ -136,7 +135,7 @@
     addDefaultCaCertificates(), and QSslConfiguration::defaultConfiguration().setCaCertificates().
     \endlist
 
-    \note If available, root certificates on Unix (excluding \macos) will be
+    \note If available, root certificates on Unix (excluding OS X) will be
     loaded on demand from the standard certificate directories. If you do not
     want to load root certificates on demand, you need to call either
     QSslConfiguration::defaultConfiguration().setCaCertificates() before the first
@@ -2591,8 +2590,7 @@ QList<QByteArray> QSslSocketPrivate::unixRootCertDirectories()
                                << "/var/ssl/certs/" // AIX
                                << "/usr/local/ssl/certs/" // Solaris
                                << "/etc/openssl/certs/" // BlackBerry
-                               << "/opt/openssl/certs/" // HP-UX
-                               << "/etc/ssl/"; // OpenBSD
+                               << "/opt/openssl/certs/"; // HP-UX
 }
 
 /*!

@@ -62,8 +62,6 @@
 #include <utime.h>
 #include <errno.h>
 #include <unistd.h>
-#include <signal.h>
-#include <sys/wait.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
 #else
@@ -74,11 +72,9 @@
 
 #ifdef Q_OS_WIN32
 #define QT_POPEN _popen
-#define QT_POPEN_READ "rb"
 #define QT_PCLOSE _pclose
 #else
 #define QT_POPEN popen
-#define QT_POPEN_READ "r"
 #define QT_PCLOSE pclose
 #endif
 
@@ -417,7 +413,7 @@ QByteArray QMakeEvaluator::getCommandOutput(const QString &args) const
 #else
     if (FILE *proc = QT_POPEN(QString(QLatin1String("cd ")
                                + IoUtils::shellQuote(QDir::toNativeSeparators(currentDirectory()))
-                               + QLatin1String(" && ") + args).toLocal8Bit().constData(), QT_POPEN_READ)) {
+                               + QLatin1String(" && ") + args).toLocal8Bit().constData(), "r")) {
         while (!feof(proc)) {
             char buff[10 * 1024];
             int read_in = int(fread(buff, 1, sizeof(buff), proc));
@@ -427,9 +423,6 @@ QByteArray QMakeEvaluator::getCommandOutput(const QString &args) const
         }
         QT_PCLOSE(proc);
     }
-# ifdef Q_OS_WIN
-    out.replace("\r\n", "\n");
-# endif
 #endif
     return out;
 }
@@ -1029,11 +1022,7 @@ ProStringList QMakeEvaluator::evaluateBuiltinExpand(
             QString rstr = QDir::cleanPath(
                     QDir(args.count() > 1 ? args.at(1).toQString(m_tmp2) : currentDirectory())
                     .absoluteFilePath(args.at(0).toQString(m_tmp1)));
-            ret << (rstr.isSharedWith(m_tmp1)
-                        ? args.at(0)
-                        : args.count() > 1 && rstr.isSharedWith(m_tmp2)
-                            ? args.at(1)
-                            : ProString(rstr).setSource(args.at(0)));
+            ret << (rstr.isSharedWith(m_tmp1) ? args.at(0) : ProString(rstr).setSource(args.at(0)));
         }
         break;
     case E_RELATIVE_PATH:
@@ -1206,8 +1195,7 @@ QMakeEvaluator::VisitReturn QMakeEvaluator::evaluateBuiltinConditional(
         return ReturnFalse;
     case T_REQUIRES:
 #ifdef PROEVALUATOR_FULL
-        if (checkRequirements(args) == ReturnError)
-            return ReturnError;
+        checkRequirements(args);
 #endif
         return ReturnFalse; // Another qmake breakage
     case T_EVAL: {
@@ -1228,8 +1216,8 @@ QMakeEvaluator::VisitReturn QMakeEvaluator::evaluateBuiltinConditional(
             evalError(fL1S("if(condition) requires one argument."));
             return ReturnFalse;
         }
-        return evaluateConditional(args.at(0).toQString(),
-                                   m_current.pro->fileName(), m_current.line);
+        return returnBool(evaluateConditional(args.at(0).toQString(),
+                                              m_current.pro->fileName(), m_current.line));
     }
     case T_CONFIG: {
         if (args.count() < 1 || args.count() > 2) {
@@ -1506,14 +1494,9 @@ QMakeEvaluator::VisitReturn QMakeEvaluator::evaluateBuiltinConditional(
         runProcess(&proc, args.at(0).toQString(m_tmp2));
         return returnBool(proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0);
 #else
-        int ec = system((QLatin1String("cd ")
-                         + IoUtils::shellQuote(QDir::toNativeSeparators(currentDirectory()))
-                         + QLatin1String(" && ") + args.at(0)).toLocal8Bit().constData());
-#  ifdef Q_OS_UNIX
-        if (ec != -1 && WIFSIGNALED(ec) && (WTERMSIG(ec) == SIGQUIT || WTERMSIG(ec) == SIGINT))
-            raise(WTERMSIG(ec));
-#  endif
-        return returnBool(ec == 0);
+        return returnBool(system((QLatin1String("cd ")
+                                  + IoUtils::shellQuote(QDir::toNativeSeparators(currentDirectory()))
+                                  + QLatin1String(" && ") + args.at(0)).toLocal8Bit().constData()) == 0);
 #endif
 #else
         return ReturnTrue;

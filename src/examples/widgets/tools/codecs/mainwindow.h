@@ -46,8 +46,9 @@
 
 QT_BEGIN_NAMESPACE
 class QAction;
+class QMenu;
 class QTextCodec;
-class QPlainTextEdit;
+class QTextEdit;
 QT_END_NAMESPACE
 class PreviewForm;
 
@@ -66,12 +67,21 @@ private slots:
 
 private:
     void findCodecs();
+    void createActions();
     void createMenus();
 
-    QList<QAction *> saveAsActs;
-    QPlainTextEdit *textEdit;
+    QTextEdit *textEdit;
     PreviewForm *previewForm;
     QList<QTextCodec *> codecs;
+
+    QMenu *fileMenu;
+    QMenu *helpMenu;
+    QMenu *saveAsMenu;
+    QAction *openAct;
+    QList<QAction *> saveAsActs;
+    QAction *exitAct;
+    QAction *aboutAct;
+    QAction *aboutQtAct;
 };
 
 #endif

@@ -44,8 +44,7 @@
 #include <QObject>
 #include <QColor>
 
-QT_FORWARD_DECLARE_CLASS(QOpenGLFunctions_1_1)
-
+class QOpenGLFunctions_1_1;
 class Patch;
 struct Geometry;
 

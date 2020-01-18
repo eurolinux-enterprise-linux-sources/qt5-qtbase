@@ -351,14 +351,16 @@ QByteArray QJsonDocument::toJson(JsonFormat format) const
 #endif
 
 /*!
- Parses \a json as a UTF-8 encoded JSON document, and creates a QJsonDocument
+ Parses a UTF-8 encoded JSON document and creates a QJsonDocument
  from it.
 
- Returns a valid (non-null) QJsonDocument if the parsing succeeds. If it fails,
- the returned document will be null, and the optional \a error variable will contain
- further details about the error.
+ \a json contains the json document to be parsed.
 
- \sa toJson(), QJsonParseError, isNull()
+ The optional \a error variable can be used to pass in a QJsonParseError data
+ structure that will contain information about possible errors encountered during
+ parsing.
+
+ \sa toJson(), QJsonParseError
  */
 QJsonDocument QJsonDocument::fromJson(const QByteArray &json, QJsonParseError *error)
 {

@@ -6105,7 +6105,8 @@ void QWindowsMobileStyle::drawComplexControl(ComplexControl control, const QStyl
                 buttonFlags |= State_Sunken;
             if (toolbutton->activeSubControls & SC_ToolButtonMenu)
                 menuFlags |= State_On;
-            QStyleOption tool = *toolbutton;
+            QStyleOption tool(0);
+            tool.palette = toolbutton->palette;
             if (toolbutton->subControls & SC_ToolButton) {
                     tool.rect = button;
                     tool.state = buttonFlags;
@@ -6114,11 +6115,14 @@ void QWindowsMobileStyle::drawComplexControl(ComplexControl control, const QStyl
             if (toolbutton->subControls & SC_ToolButtonMenu) {
                 tool.rect = menuarea;
                 tool.state = buttonFlags & State_Enabled;
-                QStyleOption toolMenu = *toolbutton;
+                QStyleOption toolMenu(0);
+                toolMenu = *toolbutton;
                 toolMenu.state = menuFlags;
                 if (buttonFlags & State_Sunken)
                   proxy()->drawPrimitive(PE_PanelButtonTool, &toolMenu, painter, widget);
-                QStyleOption arrowOpt = toolMenu;
+                QStyleOption arrowOpt(0);
+                arrowOpt.rect = tool.rect;
+                arrowOpt.palette = tool.palette;
                 State flags = State_None;
                 if (menuFlags & State_Enabled)
                     flags |= State_Enabled;
@@ -6240,8 +6244,9 @@ void QWindowsMobileStyle::drawComplexControl(ComplexControl control, const QStyl
                 flags |= State_Enabled;
             if (option->state & State_On)
                 flags |= State_Sunken;
-            QStyleOption arrowOpt = *cmb;
+            QStyleOption arrowOpt(0);
             arrowOpt.rect = ar;
+            arrowOpt.palette = cmb->palette;
             arrowOpt.state = flags;
             proxy()->drawPrimitive(PrimitiveElement(PE_IndicatorArrowDownBig), &arrowOpt, painter, widget);
             if (cmb->subControls & SC_ComboBoxEditField) {

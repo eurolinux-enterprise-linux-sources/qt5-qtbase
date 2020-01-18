@@ -1,3 +1,4 @@
+CONFIG += installed
 include(../common/common.pri)
 DEF_FILE_TARGET=$${TARGET}
 TARGET=$$qtLibraryTarget($${LIBEGL_NAME})

@@ -255,7 +255,6 @@ public:
     QLayoutItem *plug(const QList<int> &path);
     QLayoutItem *unplug(const QList<int> &path);
     void remove(const QList<int> &path);
-    void removePlaceHolder(const QString &name);
 
     void fitLayout();
 

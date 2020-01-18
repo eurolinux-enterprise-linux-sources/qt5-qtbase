@@ -76,8 +76,6 @@ protected:
     void paintEvent(QPaintEvent *event) Q_DECL_OVERRIDE;
 
 private:
-    void calculateSquareSize();
-
     QFont displayFont;
     int columns;
     int lastKey;

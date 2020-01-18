@@ -17,7 +17,6 @@ CFLAGS="$SYSROOT_FLAG"
 CXXFLAGS="$SYSROOT_FLAG"
 MAC_ARCH_CXXFLAGS=""
 MAC_ARCH_LFLAGS=""
-QMAKE_ARGS=
 while [ "$#" -gt 0 ]; do
     PARAM=$1
     case $PARAM in
@@ -57,12 +56,13 @@ while [ "$#" -gt 0 ]; do
 	CXXFLAGS="$CXXFLAGS $PARAM \"$2\""
 	shift
 	;;
-    *)
-        QMAKE_ARGS="$QMAKE_ARGS $PARAM"
-        ;;
+    *)  ;;
     esac
     shift
 done
+
+# debuggery
+[ "$VERBOSE" = "yes" ] && echo "$DESCRIPTION auto-detection... ($*)"
 
 test -d "$OUTDIR/$TEST" || mkdir -p "$OUTDIR/$TEST"
 
@@ -86,11 +86,9 @@ set -- \
      "QMAKE_CFLAGS+=$MAC_ARCH_CFLAGS" \
      "QMAKE_CXXFLAGS*=$CXXFLAGS" \
      "QMAKE_CXXFLAGS+=$MAC_ARCH_CXXFLAGS" \
-     $QMAKE_ARGS \
      "$SRCDIR/$TEST/$EXE.pro" \
      -o "$OUTDIR/$TEST/Makefile"
 if [ "$VERBOSE" = "yes" ]; then
-    echo
     OUTDIR=$OUTDIR "$@" && $MAKE && SUCCESS=yes
 else
     OUTDIR=$OUTDIR "$@" >/dev/null 2>&1 && $MAKE >/dev/null 2>&1 && SUCCESS=yes
@@ -98,9 +96,9 @@ fi
 
 # done
 if [ "$SUCCESS" != "yes" ]; then
-    [ "$VERBOSE" = "yes" ] && echo "$DESCRIPTION disabled." || echo " no."
+    [ "$VERBOSE" = "yes" ] && echo "$DESCRIPTION disabled."
     exit 1
 else
-    [ "$VERBOSE" = "yes" ] && echo "$DESCRIPTION enabled." || echo " yes."
+    [ "$VERBOSE" = "yes" ] && echo "$DESCRIPTION enabled."
     exit 0
 fi

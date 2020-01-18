@@ -316,11 +316,12 @@ private:
 
         GlyphCacheEntry &operator=(const GlyphCacheEntry &);
 
+        const void *context;
         QExplicitlySharedDataPointer<QFontEngineGlyphCache> cache;
-        bool operator==(const GlyphCacheEntry &other) const { return cache == other.cache; }
+        bool operator==(const GlyphCacheEntry &other) const { return context == other.context && cache == other.cache; }
     };
-    typedef QLinkedList<GlyphCacheEntry> GlyphCaches;
-    mutable QHash<const void *, GlyphCaches> m_glyphCaches;
+
+    mutable QLinkedList<GlyphCacheEntry> m_glyphCaches;
 
 private:
     QVariant m_userData;

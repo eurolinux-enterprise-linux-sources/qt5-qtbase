@@ -39,9 +39,6 @@
 #include "qwinrtbackingstore.h"
 #include "qwinrtinputcontext.h"
 #include "qwinrtcursor.h"
-#ifndef QT_NO_DRAGANDDROP
-#include "qwinrtdrag.h"
-#endif
 #include "qwinrtwindow.h"
 #include <private/qeventdispatcher_winrt_p.h>
 
@@ -556,9 +553,6 @@ QWinRTScreen::QWinRTScreen()
     ComPtr<Xaml::IUIElement> uiElement;
     hr = canvas.As(&uiElement);
     Q_ASSERT_SUCCEEDED(hr);
-#if _MSC_VER >= 1900 && !defined(QT_NO_DRAGANDDROP)
-    QWinRTDrag::instance()->setUiElement(uiElement);
-#endif
     hr = window->put_Content(uiElement.Get());
     Q_ASSERT_SUCCEEDED(hr);
     hr = canvas.As(&d->canvas);
@@ -760,18 +754,13 @@ void QWinRTScreen::addWindow(QWindow *window)
 {
     Q_D(QWinRTScreen);
     qCDebug(lcQpaWindows) << __FUNCTION__ << window;
-    if (window == topWindow() || window->surfaceClass() == QSurface::Offscreen)
+    if (window == topWindow())
         return;
 
     d->visibleWindows.prepend(window);
-    updateWindowTitle(window->title());
     QWindowSystemInterface::handleWindowActivated(window, Qt::OtherFocusReason);
     handleExpose();
-    QWindowSystemInterface::flushWindowSystemEvents(QEventLoop::ExcludeUserInputEvents);
-
-#if _MSC_VER >= 1900 && !defined(QT_NO_DRAGANDDROP)
-    QWinRTDrag::instance()->setDropTarget(window);
-#endif
+    QWindowSystemInterface::flushWindowSystemEvents();
 }
 
 void QWinRTScreen::removeWindow(QWindow *window)
@@ -783,13 +772,9 @@ void QWinRTScreen::removeWindow(QWindow *window)
     if (!d->visibleWindows.removeAll(window))
         return;
     if (wasTopWindow)
-        QWindowSystemInterface::handleWindowActivated(Q_NULLPTR, Qt::OtherFocusReason);
+        QWindowSystemInterface::handleWindowActivated(window, Qt::OtherFocusReason);
     handleExpose();
-    QWindowSystemInterface::flushWindowSystemEvents(QEventLoop::ExcludeUserInputEvents);
-#if _MSC_VER >= 1900 && !defined(QT_NO_DRAGANDDROP)
-    if (wasTopWindow)
-        QWinRTDrag::instance()->setDropTarget(topWindow());
-#endif
+    QWindowSystemInterface::flushWindowSystemEvents();
 }
 
 void QWinRTScreen::raise(QWindow *window)
@@ -805,8 +790,6 @@ void QWinRTScreen::lower(QWindow *window)
     const bool wasTopWindow = window == topWindow();
     if (wasTopWindow && d->visibleWindows.size() == 1)
         return;
-    if (window->surfaceClass() == QSurface::Offscreen)
-        return;
     d->visibleWindows.removeAll(window);
     d->visibleWindows.append(window);
     if (wasTopWindow)
@@ -814,10 +797,15 @@ void QWinRTScreen::lower(QWindow *window)
     handleExpose();
 }
 
-void QWinRTScreen::updateWindowTitle(const QString &title)
+void QWinRTScreen::updateWindowTitle()
 {
     Q_D(QWinRTScreen);
 
+    QWindow *window = topWindow();
+    if (!window)
+        return;
+
+    const QString title = window->title();
     HStringReference titleRef(reinterpret_cast<LPCWSTR>(title.utf16()), title.length());
     HRESULT hr = d->view->put_Title(titleRef.Get());
     RETURN_VOID_IF_FAILED("Unable to set window title");
@@ -982,9 +970,6 @@ HRESULT QWinRTScreen::onPointerExited(ICoreWindow *, IPointerEventArgs *args)
     return S_OK;
 }
 
-// Required for qwinrtdrag.cpp
-ComPtr<IPointerPoint> qt_winrt_lastPointerPoint;
-
 HRESULT QWinRTScreen::onPointerUpdated(ICoreWindow *, IPointerEventArgs *args)
 {
     Q_D(QWinRTScreen);
@@ -992,7 +977,6 @@ HRESULT QWinRTScreen::onPointerUpdated(ICoreWindow *, IPointerEventArgs *args)
     if (FAILED(args->get_CurrentPoint(&pointerPoint)))
         return E_INVALIDARG;
 
-    qt_winrt_lastPointerPoint = pointerPoint;
     // Common traits - point, modifiers, properties
     Point point;
     pointerPoint->get_Position(&point);
