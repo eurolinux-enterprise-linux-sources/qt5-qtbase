@@ -129,7 +129,11 @@
             "label": "dlopen()",
             "test": {
                 "include": "dlfcn.h",
-                "main": "dlopen(0, 0);"
+                "main": [
+                    "dlclose(dlopen(0, 0));",
+                    "dlsym(RTLD_DEFAULT, 0);",
+                    "dlerror();"
+                ]
             },
             "sources": [
                 "",
@@ -178,7 +182,7 @@
         "slog2": {
             "label": "slog2",
             "test": {
-                "include": "slog2.h",
+                "include": "sys/slog2.h",
                 "main": "slog2_set_default_buffer((slog2_buffer_t)-1);"
             },
             "export": "",
@@ -509,7 +513,7 @@
             "label": "PPS",
             "emitIf": "config.qnx",
             "condition": "libs.pps",
-            "output": [ "privateConfig" ]
+            "output": [ "privateFeature" ]
         },
         "qeventtransition": {
             "label": "QEventTransition class",

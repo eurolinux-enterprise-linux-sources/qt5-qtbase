@@ -164,9 +164,10 @@ public:
         const const_iterator ce = this->cend(), cit = std::find(this->cbegin(), ce, t);
         if (cit == ce)
             return 0;
-        // next operation detaches, so ce, cit may become invalidated:
+        // next operation detaches, so ce, cit, t may become invalidated:
+        const T tCopy = t;
         const int firstFoundIdx = std::distance(this->cbegin(), cit);
-        const iterator e = end(), it = std::remove(begin() + firstFoundIdx, e, t);
+        const iterator e = end(), it = std::remove(begin() + firstFoundIdx, e, tCopy);
         const int result = std::distance(it, e);
         erase(it, e);
         return result;
@@ -723,7 +724,7 @@ typename QVector<T>::iterator QVector<T>::insert(iterator before, size_type n, c
         } else {
             T *b = d->begin() + offset;
             T *i = b + n;
-            memmove(i, b, (d->size - offset) * sizeof(T));
+            memmove(static_cast<void *>(i), static_cast<const void *>(b), (d->size - offset) * sizeof(T));
             while (i != b)
                 new (--i) T(copy);
         }

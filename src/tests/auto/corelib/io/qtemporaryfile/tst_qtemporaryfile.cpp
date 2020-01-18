@@ -36,6 +36,8 @@
 #include <qset.h>
 #include <qtextcodec.h>
 
+#include <QtTest/private/qtesthelpers_p.h>
+
 #if defined(Q_OS_WIN)
 # include <windows.h>
 #endif
@@ -97,7 +99,7 @@ void tst_QTemporaryFile::initTestCase()
     QVERIFY(QDir("test-XXXXXX").exists() || QDir().mkdir("test-XXXXXX"));
     QCoreApplication::setApplicationName("tst_qtemporaryfile");
 
-#if defined(Q_OS_ANDROID)
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
     QString sourceDir(":/android_testdata/");
     QDirIterator it(sourceDir, QDirIterator::Subdirectories);
     while (it.hasNext()) {
@@ -139,16 +141,6 @@ void tst_QTemporaryFile::getSetCheck()
     QCOMPARE(false, obj1.autoRemove());
     obj1.setAutoRemove(true);
     QCOMPARE(true, obj1.autoRemove());
-}
-
-static inline bool canHandleUnicodeFileNames()
-{
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
-    return true;
-#else
-    // Check for UTF-8 by converting the Euro symbol (see tst_utf8)
-    return QFile::encodeName(QString(QChar(0x20AC))) == QByteArrayLiteral("\342\202\254");
-#endif
 }
 
 static QString hanTestText()
@@ -199,7 +191,7 @@ void tst_QTemporaryFile::fileTemplate_data()
     QTest::newRow("set template, with xxx") << "" << "qt_" << ".xxx" << "qt_XXXXXX.xxx";
     QTest::newRow("set template, with >6 X's") << "" << "qt_" << ".xxx" << "qt_XXXXXXXXXXXXXX.xxx";
     QTest::newRow("set template, with >6 X's, no suffix") << "" << "qt_" << "" << "qt_XXXXXXXXXXXXXX";
-    if (canHandleUnicodeFileNames()) {
+    if (QTestPrivate::canHandleUnicodeFileNames()) {
         // Test Umlauts (contained in Latin1)
         QString prefix = "qt_" + umlautTestText();
         QTest::newRow("Umlauts") << (prefix + "XXXXXX") << prefix << QString() << QString();
@@ -331,7 +323,7 @@ void tst_QTemporaryFile::nonWritableCurrentDir()
 
     ChdirOnReturn cor(QDir::currentPath());
 
-#if defined(Q_OS_ANDROID)
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
     QDir::setCurrent("/data");
 #else
     QDir::setCurrent("/home");
@@ -500,7 +492,7 @@ void tst_QTemporaryFile::renameFdLeak()
 {
 #ifdef Q_OS_UNIX
 
-#  if defined(Q_OS_ANDROID)
+#  if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
     ChdirOnReturn cor(QDir::currentPath());
     QDir::setCurrent(QStandardPaths::writableLocation(QStandardPaths::CacheLocation));
 #  endif
@@ -709,7 +701,7 @@ void tst_QTemporaryFile::createNativeFile_data()
     QTest::addColumn<bool>("valid");
     QTest::addColumn<QByteArray>("content");
 
-#if defined(Q_OS_ANDROID)
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
     const QString nativeFilePath = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/resources/test.txt");
 #else
     const QString nativeFilePath = QFINDTESTDATA("resources/test.txt");
@@ -761,7 +753,7 @@ void tst_QTemporaryFile::QTBUG_4796_data()
     QTest::newRow("XXXXXXbla") << QString() << QString("bla") << true;
     QTest::newRow("does-not-exist/qt_temp.XXXXXX") << QString("does-not-exist/qt_temp") << QString() << false;
 
-    if (canHandleUnicodeFileNames()) {
+    if (QTestPrivate::canHandleUnicodeFileNames()) {
         QTest::newRow("XXXXXX<unicode>") << QString() << unicode << true;
         QTest::newRow("<unicode>XXXXXX") << unicode << QString() << true;
         QTest::newRow("<unicode>XXXXXX<unicode>") << unicode << unicode << true;

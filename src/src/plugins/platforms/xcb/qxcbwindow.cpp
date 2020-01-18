@@ -907,7 +907,9 @@ void QXcbWindow::hide()
             if (QWindow *childWindow = childWindowAt(enterWindow, cursorPos))
                 enterWindow = childWindow;
             const QPoint localPos = enterWindow->mapFromGlobal(cursorPos);
-            QWindowSystemInterface::handleEnterEvent(enterWindow, localPos, cursorPos);
+            QWindowSystemInterface::handleEnterEvent(enterWindow,
+                                                     localPos * QHighDpiScaling::factor(enterWindow),
+                                                     nativePos);
         }
     }
 }
@@ -2155,7 +2157,7 @@ bool QXcbWindow::isEmbedded() const
 QPoint QXcbWindow::mapToGlobal(const QPoint &pos) const
 {
     if (!m_embedded)
-        return pos;
+        return QPlatformWindow::mapToGlobal(pos);
 
     QPoint ret;
     xcb_translate_coordinates_cookie_t cookie =
@@ -2175,7 +2177,7 @@ QPoint QXcbWindow::mapToGlobal(const QPoint &pos) const
 QPoint QXcbWindow::mapFromGlobal(const QPoint &pos) const
 {
     if (!m_embedded)
-        return pos;
+        return QPlatformWindow::mapFromGlobal(pos);
 
     QPoint ret;
     xcb_translate_coordinates_cookie_t cookie =

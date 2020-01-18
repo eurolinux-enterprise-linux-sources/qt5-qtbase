@@ -64,6 +64,14 @@
 #define Q_NO_SYMLINKS
 #endif
 
+#if defined(Q_OS_WIN)
+QT_BEGIN_NAMESPACE
+extern Q_CORE_EXPORT int qt_ntfs_permission_lookup;
+QT_END_NAMESPACE
+#  ifndef Q_OS_WINRT
+bool IsUserAdmin();
+#  endif
+#endif
 
 #if defined(Q_OS_UNIX) && !defined(Q_OS_VXWORKS)
 inline bool qt_isEvilFsTypeName(const char *name)
@@ -1192,7 +1200,7 @@ void tst_QFileInfo::fileTimes()
     QEXPECT_FAIL("", "WinRT does not allow timestamp handling change in the filesystem due to sandboxing", Continue);
 #elif defined(Q_OS_QNX)
     QEXPECT_FAIL("", "QNX uses the noatime filesystem option", Continue);
-#elif defined(Q_OS_ANDROID)
+#elif defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
     if (fileInfo.lastRead() <= beforeRead)
         QEXPECT_FAIL("", "Android may use relatime or noatime on mounts", Continue);
 #endif
@@ -1634,6 +1642,15 @@ void tst_QFileInfo::isWritable()
     QVERIFY2(fi.exists(), msgDoesNotExist(fi.absoluteFilePath()).constData());
     QVERIFY(!fi.isWritable());
 #endif
+
+#if defined (Q_OS_WIN) && !defined(Q_OS_WINRT)
+    QScopedValueRollback<int> ntfsMode(qt_ntfs_permission_lookup);
+    qt_ntfs_permission_lookup = 1;
+    QFileInfo fi2(QFile::decodeName(qgetenv("SystemRoot") + "/system.ini"));
+    QVERIFY(fi2.exists());
+    QCOMPARE(fi2.isWritable(), IsUserAdmin());
+#endif
+
 #if defined (Q_OS_QNX) // On QNX /etc is usually on a read-only filesystem
     QVERIFY(!QFileInfo("/etc/passwd").isWritable());
 #elif defined (Q_OS_UNIX) && !defined(Q_OS_VXWORKS) // VxWorks does not have users/groups
@@ -1647,7 +1664,7 @@ void tst_QFileInfo::isWritable()
 void tst_QFileInfo::isExecutable()
 {
     QString appPath = QCoreApplication::applicationDirPath();
-#if defined(Q_OS_ANDROID)
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
     appPath += "/libtst_qfileinfo.so";
 #else
     appPath += "/tst_qfileinfo";
@@ -1807,7 +1824,7 @@ void tst_QFileInfo::detachingOperations()
 }
 
 #if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
-BOOL IsUserAdmin()
+bool IsUserAdmin()
 {
     BOOL b;
     SID_IDENTIFIER_AUTHORITY NtAuthority = SECURITY_NT_AUTHORITY;
@@ -1825,12 +1842,8 @@ BOOL IsUserAdmin()
         FreeSid(AdministratorsGroup);
     }
 
-    return(b);
+    return b != FALSE;
 }
-
-QT_BEGIN_NAMESPACE
-extern Q_CORE_EXPORT int qt_ntfs_permission_lookup;
-QT_END_NAMESPACE
 
 #endif // Q_OS_WIN && !Q_OS_WINRT
 

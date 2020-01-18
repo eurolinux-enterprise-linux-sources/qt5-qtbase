@@ -47,6 +47,9 @@
 #include "qdatetime.h"
 #include "qoperatingsystemversion.h"
 #include "qoperatingsystemversion_p.h"
+#if defined(Q_OS_WIN) || defined(Q_OS_CYGWIN) || defined(Q_OS_WINRT)
+#include "qoperatingsystemversion_win_p.h"
+#endif
 #include <private/qlocale_tools_p.h>
 
 #include <qmutex.h>
@@ -78,7 +81,7 @@
 #  include <envLib.h>
 #endif
 
-#if defined(Q_OS_ANDROID)
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
 #include <private/qjni_p.h>
 #endif
 
@@ -552,7 +555,7 @@ Q_STATIC_ASSERT_X(QT_POINTER_SIZE == sizeof(void *), "QT_POINTER_SIZE defined in
     {long long int } (\c __int64 on Windows).
 
     Several convenience type definitions are declared: \l qreal for \c
-    double, \l uchar for \c unsigned char, \l uint for \c unsigned
+    double or \c float, \l uchar for \c unsigned char, \l uint for \c unsigned
     int, \l ulong for \c unsigned long and \l ushort for \c unsigned
     short.
 
@@ -2309,7 +2312,7 @@ static bool findUnixOsVersion(QUnixOSVersion &v)
 #  endif // USE_ETC_OS_RELEASE
 #endif // Q_OS_UNIX
 
-#ifdef Q_OS_ANDROID
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
 static const char *osVer_helper(QOperatingSystemVersion)
 {
 /* Data:
@@ -2790,7 +2793,7 @@ QString QSysInfo::productVersion()
 */
 QString QSysInfo::prettyProductName()
 {
-#if defined(Q_OS_ANDROID) || defined(Q_OS_DARWIN) || defined(Q_OS_WIN)
+#if (defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)) || defined(Q_OS_DARWIN) || defined(Q_OS_WIN)
     const auto version = QOperatingSystemVersion::current();
     const char *name = osVer_helper(version);
     if (name)
@@ -3346,7 +3349,7 @@ bool qunsetenv(const char *varName)
 #endif
 }
 
-#if defined(Q_OS_ANDROID) && (__ANDROID_API__ < 21)
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED) && (__ANDROID_API__ < 21)
 typedef QThreadStorage<QJNIObjectPrivate> AndroidRandomStorage;
 Q_GLOBAL_STATIC(AndroidRandomStorage, randomTLS)
 
@@ -3380,7 +3383,7 @@ Q_GLOBAL_STATIC(SeedStorage, randTLS)  // Thread Local Storage for seed value
 */
 void qsrand(uint seed)
 {
-#if defined(Q_OS_ANDROID) && (__ANDROID_API__ < 21)
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED) && (__ANDROID_API__ < 21)
     if (randomTLS->hasLocalData()) {
         randomTLS->localData().callMethod<void>("setSeed", "(J)V", jlong(seed));
         return;
@@ -3434,7 +3437,7 @@ void qsrand(uint seed)
 */
 int qrand()
 {
-#if defined(Q_OS_ANDROID) && (__ANDROID_API__ < 21)
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED) && (__ANDROID_API__ < 21)
     AndroidRandomStorage *randomStorage = randomTLS();
     if (!randomStorage)
         return rand();
@@ -4298,6 +4301,7 @@ bool QInternal::activateCallbacks(Callback cb, void **parameters)
 /*!
     \macro qDebug(const char *message, ...)
     \relates <QtGlobal>
+    \threadsafe
 
     Calls the message handler with the debug message \a message. If no
     message handler has been installed, the message is printed to
@@ -4334,6 +4338,7 @@ bool QInternal::activateCallbacks(Callback cb, void **parameters)
 /*!
     \macro qInfo(const char *message, ...)
     \relates <QtGlobal>
+    \threadsafe
     \since 5.5
 
     Calls the message handler with the informational message \a message. If no
@@ -4371,6 +4376,7 @@ bool QInternal::activateCallbacks(Callback cb, void **parameters)
 /*!
     \macro qWarning(const char *message, ...)
     \relates <QtGlobal>
+    \threadsafe
 
     Calls the message handler with the warning message \a message. If no
     message handler has been installed, the message is printed to
@@ -4405,6 +4411,7 @@ bool QInternal::activateCallbacks(Callback cb, void **parameters)
 /*!
     \macro qCritical(const char *message, ...)
     \relates <QtGlobal>
+    \threadsafe
 
     Calls the message handler with the critical message \a message. If no
     message handler has been installed, the message is printed to

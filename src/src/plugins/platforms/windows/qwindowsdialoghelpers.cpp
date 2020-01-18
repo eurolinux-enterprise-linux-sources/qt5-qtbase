@@ -65,7 +65,6 @@
 #include <QtCore/QMutex>
 #include <QtCore/QMutexLocker>
 #include <QtCore/QUuid>
-#include <QtCore/QRegularExpression>
 #include <QtCore/QTemporaryFile>
 #include <QtCore/private/qsystemlibrary_p.h>
 
@@ -1010,7 +1009,9 @@ void QWindowsNativeFileDialogBase::setMode(QFileDialogOptions::FileMode mode,
         break;
     case QFileDialogOptions::Directory:
     case QFileDialogOptions::DirectoryOnly:
-        flags |= FOS_PICKFOLDERS | FOS_FILEMUSTEXIST;
+        // QTBUG-63645: Restrict to file system items, as Qt cannot deal with
+        // places like 'Network', etc.
+        flags |= FOS_PICKFOLDERS | FOS_FILEMUSTEXIST | FOS_FORCEFILESYSTEM;
         break;
     case QFileDialogOptions::ExistingFiles:
         flags |= FOS_FILEMUSTEXIST | FOS_ALLOWMULTISELECT;
@@ -1151,12 +1152,32 @@ void QWindowsNativeFileDialogBase::setLabelText(QFileDialogOptions::DialogLabel 
     }
 }
 
+static bool isHexRange(const QString& s, int start, int end)
+{
+    for (;start < end; ++start) {
+        QChar ch = s.at(start);
+        if (!(ch.isDigit()
+              || (ch >= QLatin1Char('a') && ch <= QLatin1Char('f'))
+              || (ch >= QLatin1Char('A') && ch <= QLatin1Char('F'))))
+            return false;
+    }
+    return true;
+}
+
 static inline bool isClsid(const QString &s)
 {
     // detect "374DE290-123F-4565-9164-39C4925E467B".
-   static const QRegularExpression pattern(QLatin1String("\\A[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\\z"));
-   Q_ASSERT(pattern.isValid());
-   return pattern.match(s).hasMatch();
+    const QChar dash(QLatin1Char('-'));
+    return s.size() == 36
+            && isHexRange(s, 0, 8)
+            && s.at(8) == dash
+            && isHexRange(s, 9, 13)
+            && s.at(13) == dash
+            && isHexRange(s, 14, 18)
+            && s.at(18) == dash
+            && isHexRange(s, 19, 23)
+            && s.at(23) == dash
+            && isHexRange(s, 24, 36);
 }
 
 void QWindowsNativeFileDialogBase::selectFile(const QString &fileName) const
@@ -1219,6 +1240,8 @@ void QWindowsNativeFileDialogBase::onSelectionChange()
 {
     const QList<QUrl> current = selectedFiles();
     m_data.setSelectedFiles(current);
+    qCDebug(lcQpaDialogs) << __FUNCTION__ << current << current.size();
+
     if (current.size() == 1)
         emit currentChanged(current.front());
 }
@@ -1415,7 +1438,7 @@ QList<QUrl> QWindowsNativeOpenFileDialog::dialogResult() const
         for (IShellItem *item : QWindowsShellItem::itemsFromItemArray(items)) {
             QWindowsShellItem qItem(item);
             const QString path = qItem.path();
-            if (path.isEmpty()) {
+            if (path.isEmpty() && !qItem.isDir()) {
                 const QString temporaryCopy = createTemporaryItemCopy(qItem);
                 if (temporaryCopy.isEmpty())
                     qWarning() << "Unable to create a local copy of" << qItem;

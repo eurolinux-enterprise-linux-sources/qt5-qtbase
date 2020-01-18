@@ -638,8 +638,12 @@ static bool _q_dontOverrideCtrlLMB = false;
     NSPoint screenPoint;
     if (theEvent) {
         NSPoint windowPoint = [theEvent locationInWindow];
-        NSRect screenRect = [[theEvent window] convertRectToScreen:NSMakeRect(windowPoint.x, windowPoint.y, 1, 1)];
-        screenPoint = screenRect.origin;
+        if (qIsNaN(windowPoint.x) || qIsNaN(windowPoint.y)) {
+            screenPoint = [NSEvent mouseLocation];
+        } else {
+            NSRect screenRect = [[theEvent window] convertRectToScreen:NSMakeRect(windowPoint.x, windowPoint.y, 1, 1)];
+            screenPoint = screenRect.origin;
+        }
     } else {
         screenPoint = [NSEvent mouseLocation];
     }
@@ -1064,6 +1068,8 @@ Q_GLOBAL_STATIC(QCocoaTabletDeviceDataHash, tabletDeviceDataHash)
 
 - (bool)handleTabletEvent: (NSEvent *)theEvent
 {
+    static bool ignoreButtonMapping = qEnvironmentVariableIsSet("QT_MAC_TABLET_IGNORE_BUTTON_MAPPING");
+
     if (!m_platformWindow)
         return false;
 
@@ -1112,14 +1118,15 @@ Q_GLOBAL_STATIC(QCocoaTabletDeviceDataHash, tabletDeviceDataHash)
         rotation -= 360.0;
 
     Qt::KeyboardModifiers keyboardModifiers = [QNSView convertKeyModifiers:[theEvent modifierFlags]];
+    Qt::MouseButtons buttons = ignoreButtonMapping ? static_cast<Qt::MouseButtons>(static_cast<uint>([theEvent buttonMask])) : m_buttons;
 
     qCDebug(lcQpaTablet, "event on tablet %d with tool %d type %d unique ID %lld pos %6.1f, %6.1f root pos %6.1f, %6.1f buttons 0x%x pressure %4.2lf tilt %d, %d rotation %6.2lf",
         deviceId, deviceData.device, deviceData.pointerType, deviceData.uid,
         windowPoint.x(), windowPoint.y(), screenPoint.x(), screenPoint.y(),
-        static_cast<uint>(m_buttons), pressure, xTilt, yTilt, rotation);
+        static_cast<uint>(buttons), pressure, xTilt, yTilt, rotation);
 
     QWindowSystemInterface::handleTabletEvent(m_platformWindow->window(), timestamp, windowPoint, screenPoint,
-                                              deviceData.device, deviceData.pointerType, m_buttons, pressure, xTilt, yTilt,
+                                              deviceData.device, deviceData.pointerType, buttons, pressure, xTilt, yTilt,
                                               tangentialPressure, rotation, z, deviceData.uid,
                                               keyboardModifiers);
     return true;
@@ -1559,6 +1566,10 @@ static QTabletEvent::TabletDevice wacomTabletDevice(NSEvent *theEvent)
         if (m_composingText.isEmpty()) {
             m_sendKeyEvent = !QWindowSystemInterface::handleShortcutEvent(window, timestamp, keyCode,
                 modifiers, nativeScanCode, nativeVirtualKey, nativeModifiers, text, [nsevent isARepeat], 1);
+
+            // Handling a shortcut may result in closing the window
+            if (!m_platformWindow)
+                return true;
         }
 
         QObject *fo = m_platformWindow->window()->focusObject();
@@ -2064,6 +2075,7 @@ static QPoint mapWindowCoordinates(QWindow *source, QWindow *target, QPoint poin
     }
     else {
         NSImage *nsimage = qt_mac_create_nsimage(pixmapCursor);
+        nsimage.size = NSSizeFromCGSize((pixmapCursor.size() / pixmapCursor.devicePixelRatioF()).toCGSize());
         nativeCursor = [[NSCursor alloc] initWithImage:nsimage hotSpot:NSZeroPoint];
         [nsimage release];
     }
@@ -2072,7 +2084,11 @@ static QPoint mapWindowCoordinates(QWindow *source, QWindow *target, QPoint poin
     [nativeCursor set];
 
     // Make sure the cursor is updated correctly if the mouse does not move and window is under cursor
-    // by creating a fake move event
+    // by creating a fake move event, unless on 10.14 and later where doing so will trigger a security
+    // warning dialog. FIXME: Find a way to update the cursor without fake mouse events.
+    if (QOperatingSystemVersion::current() >= QOperatingSystemVersion(QOperatingSystemVersion::MacOS, 10, 14))
+        return;
+
     if (m_updatingDrag)
         return;
 

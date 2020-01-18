@@ -46,7 +46,7 @@ BuildRequires: pkgconfig(libsystemd)
 # where qt5-qttools builds are not yet available
 # only primary archs (for now), allow secondary to bootstrap
 %if ! 0%{?bootstrap}
-%ifarch %{arm} %{ix86} x86_64 %{power64} s390 s390x aarch64
+%ifarch %{arm} %{ix86} x86_64 ppc %{power64} s390 s390x aarch64
 %global docs 1
 %endif
 
@@ -56,8 +56,8 @@ BuildRequires: pkgconfig(libsystemd)
 
 Summary: Qt5 - QtBase components
 Name:    qt5-qtbase
-Version: 5.9.2
-Release: 3%{?dist}
+Version: 5.9.7
+Release: 2%{?dist}
 
 # See LGPL_EXCEPTIONS.txt, for exception details
 License: LGPLv2 with exceptions or GPLv3 with exceptions
@@ -1020,6 +1020,14 @@ fi
 
 
 %changelog
+* Thu Feb 07 2019 Jan Grulich <jgrulich@redhat.com> - 5.9.7-1
+- Enable -doc subpkg on PPC
+  Resolves: bz#1564000
+
+* Tue Feb 05 2019 Jan Grulich <jgrulich@redhat.com> - 5.9.7-1
+- Update to 5.9.7
+  Resolves: bz#1564000
+
 * Tue Jan 16 2018 Jan Grulich <jgrulich@redhat.com> - 5.9.2-3
 - Rebuild due to missing RELRO (fixed in binutils)
   Resolves: bz#1534987

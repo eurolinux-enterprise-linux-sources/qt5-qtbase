@@ -71,7 +71,7 @@
 #include <QtNetwork/QSslConfiguration>
 #endif
 
-#ifndef QT_NO_HTTP
+QT_REQUIRE_CONFIG(http);
 
 QT_BEGIN_NAMESPACE
 
@@ -160,6 +160,10 @@ signals:
 
 class QNetworkReplyHttpImplPrivate: public QNetworkReplyPrivate
 {
+#if QT_CONFIG(bearermanagement)
+    bool startWaitForSession(QSharedPointer<QNetworkSession> &session);
+#endif
+
 public:
 
     static QHttpNetworkRequest::Priority convert(const QNetworkRequest::Priority& prio);
@@ -309,7 +313,5 @@ public:
 };
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_HTTP
 
 #endif

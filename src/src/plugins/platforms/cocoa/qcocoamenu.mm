@@ -46,6 +46,7 @@
 #include <QtCore/private/qthread_p.h>
 #include <QtGui/private/qguiapplication_p.h>
 #include "qcocoaapplication.h"
+#include "qcocoaintegration.h"
 #include "qcocoamenuloader.h"
 #include "qcocoamenubar.h"
 #include "qcocoawindow.h"
@@ -435,6 +436,11 @@ void QCocoaMenu::timerEvent(QTimerEvent *e)
 
 void QCocoaMenu::syncMenuItem(QPlatformMenuItem *menuItem)
 {
+    syncMenuItem_helper(menuItem, false /*menubarUpdate*/);
+}
+
+void QCocoaMenu::syncMenuItem_helper(QPlatformMenuItem *menuItem, bool menubarUpdate)
+{
     QMacAutoReleasePool pool;
     QCocoaMenuItem *cocoaItem = static_cast<QCocoaMenuItem *>(menuItem);
     if (!m_menuItems.contains(cocoaItem)) {
@@ -444,8 +450,9 @@ void QCocoaMenu::syncMenuItem(QPlatformMenuItem *menuItem)
 
     const bool wasMerged = cocoaItem->isMerged();
     NSMenuItem *oldItem = cocoaItem->nsItem();
+    NSMenuItem *syncedItem = cocoaItem->sync();
 
-    if (cocoaItem->sync() != oldItem) {
+    if (syncedItem != oldItem) {
         // native item was changed for some reason
         if (oldItem) {
             if (wasMerged) {
@@ -463,6 +470,14 @@ void QCocoaMenu::syncMenuItem(QPlatformMenuItem *menuItem)
         // when an item's enabled state changes after menuWillOpen:
         scheduleUpdate();
     }
+
+    // This may be a good moment to attach this item's eventual submenu to the
+    // synced item, but only on the condition we're all currently hooked to the
+    // menunbar. A good indicator of this being the right moment is knowing that
+    // we got called from QCocoaMenuBar::updateMenuBarImmediately().
+    if (menubarUpdate)
+        if (QCocoaMenu *submenu = cocoaItem->menu())
+            submenu->setAttachedItem(syncedItem);
 }
 
 void QCocoaMenu::syncSeparatorsCollapsible(bool enable)
@@ -559,8 +574,9 @@ void QCocoaMenu::showPopup(const QWindow *parentWindow, const QRect &targetRect,
         [popupCell setMenu:m_nativeMenu];
         [popupCell selectItem:nsItem];
 
-        int availableHeight = screen->availableSize().height();
-        const QPoint &globalPos = parentWindow->mapToGlobal(pos);
+        QCocoaScreen *cocoaScreen = static_cast<QCocoaScreen *>(screen->handle());
+        int availableHeight = cocoaScreen->availableGeometry().height();
+        const QPoint &globalPos = cocoaWindow->mapToGlobal(pos);
         int menuHeight = m_nativeMenu.size.height;
         if (globalPos.y() + menuHeight > availableHeight) {
             // Maybe we need to fix the vertical popup position but we don't know the
